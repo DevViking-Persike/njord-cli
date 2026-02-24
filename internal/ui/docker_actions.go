@@ -1,0 +1,273 @@
+package ui
+
+import (
+	"fmt"
+	"path/filepath"
+	"strings"
+
+	"github.com/DevViking-Persike/njord-cli/internal/config"
+	"github.com/DevViking-Persike/njord-cli/internal/docker"
+	"github.com/DevViking-Persike/njord-cli/internal/theme"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+)
+
+type dockerActionDoneMsg struct {
+	action string
+	err    error
+}
+
+type dockerLogsMsg struct {
+	logs string
+	err  error
+}
+
+type DockerAction int
+
+const (
+	ActionStart DockerAction = iota
+	ActionStop
+	ActionRestart
+	ActionLogs
+)
+
+type DockerActionsModel struct {
+	cfg         *config.Config
+	docker      *docker.Client
+	stack       config.DockerStack
+	cursor      int
+	goBack      bool
+	containers  []docker.ContainerInfo
+	message     string
+	messageType string // "ok", "error", "info"
+	logs        string
+	showLogs    bool
+	running     bool
+	width       int
+	height      int
+}
+
+var actionLabels = []struct {
+	icon   string
+	label  string
+	desc   string
+	action DockerAction
+}{
+	{"▶", "Iniciar", "docker compose up -d", ActionStart},
+	{"■", "Parar", "docker compose down", ActionStop},
+	{"↻", "Reiniciar", "docker compose restart", ActionRestart},
+	{"☰", "Logs", "docker compose logs --tail 50", ActionLogs},
+}
+
+func NewDockerActionsModel(cfg *config.Config, dockerClient *docker.Client, stack config.DockerStack) DockerActionsModel {
+	composePath := cfg.ResolveDockerComposePath(stack)
+	projectName := filepath.Base(stack.Path)
+	containers := dockerClient.ListContainers(projectName)
+	_ = composePath // used in actions
+
+	return DockerActionsModel{
+		cfg:        cfg,
+		docker:     dockerClient,
+		stack:      stack,
+		containers: containers,
+	}
+}
+
+func (m DockerActionsModel) Init() tea.Cmd {
+	return nil
+}
+
+func (m DockerActionsModel) Update(msg tea.Msg) (DockerActionsModel, tea.Cmd) {
+	switch msg := msg.(type) {
+	case dockerActionDoneMsg:
+		m.running = false
+		if msg.err != nil {
+			m.message = fmt.Sprintf("Erro: %s", msg.err)
+			m.messageType = "error"
+		} else {
+			m.message = fmt.Sprintf("%s executado!", msg.action)
+			m.messageType = "ok"
+		}
+		// Refresh containers
+		projectName := filepath.Base(m.stack.Path)
+		m.containers = m.docker.ListContainers(projectName)
+		return m, nil
+
+	case dockerLogsMsg:
+		m.running = false
+		if msg.err != nil {
+			m.message = fmt.Sprintf("Erro ao obter logs: %s", msg.err)
+			m.messageType = "error"
+		} else {
+			m.logs = msg.logs
+			m.showLogs = true
+		}
+		return m, nil
+
+	case tea.KeyMsg:
+		if m.running {
+			return m, nil
+		}
+
+		if m.showLogs {
+			if msg.String() == "esc" || msg.String() == "q" || msg.String() == "enter" {
+				m.showLogs = false
+				m.logs = ""
+			}
+			return m, nil
+		}
+
+		switch msg.String() {
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		case "down", "j":
+			if m.cursor < len(actionLabels)-1 {
+				m.cursor++
+			}
+		case "esc", "q":
+			m.goBack = true
+			return m, nil
+		case "enter":
+			return m, m.executeAction(actionLabels[m.cursor].action)
+		}
+	}
+	return m, nil
+}
+
+func (m DockerActionsModel) View() string {
+	var b strings.Builder
+
+	// Header
+	header := lipgloss.NewStyle().Bold(true).Foreground(theme.DockerBlue).Render("  Docker Stacks")
+	divider := theme.DimStyle.Render("  " + strings.Repeat("─", 50))
+	b.WriteString("\n" + header + "\n" + divider + "\n\n")
+
+	// Stack info
+	nameStr := lipgloss.NewStyle().Bold(true).Foreground(theme.DockerBlue).Render(m.stack.Name)
+	descStr := theme.DimStyle.Render("(" + m.stack.Desc + ")")
+	b.WriteString("  " + nameStr + " " + descStr + "\n")
+
+	composePath := m.cfg.ResolveDockerComposePath(m.stack)
+	b.WriteString("  " + theme.DimStyle.Render(composePath) + "\n\n")
+
+	// Container details
+	if len(m.containers) == 0 {
+		b.WriteString(theme.DimStyle.Render("  Nenhum container encontrado (stack parada)") + "\n")
+	} else {
+		for _, ct := range m.containers {
+			var icon string
+			var stateStyle lipgloss.Style
+			if ct.State == "running" {
+				icon = "●"
+				stateStyle = theme.StatusRunning
+			} else {
+				icon = "○"
+				stateStyle = theme.StatusStopped
+			}
+			line := fmt.Sprintf("  %s  %-30s %s  %s",
+				stateStyle.Render(icon),
+				theme.TextStyle.Render(ct.Name),
+				stateStyle.Render(ct.State),
+				theme.DimStyle.Render(ct.Ports))
+			b.WriteString(line + "\n")
+		}
+	}
+
+	b.WriteString("\n")
+
+	// Show logs if active
+	if m.showLogs {
+		b.WriteString(theme.DimStyle.Render("  ─── Logs ───") + "\n")
+		lines := strings.Split(m.logs, "\n")
+		max := 30
+		if len(lines) > max {
+			lines = lines[len(lines)-max:]
+		}
+		for _, line := range lines {
+			if len(line) > m.width-4 && m.width > 10 {
+				line = line[:m.width-7] + "..."
+			}
+			b.WriteString("  " + theme.DimStyle.Render(line) + "\n")
+		}
+		b.WriteString("\n" + theme.HelpStyle.Render("  esc/enter fechar logs"))
+		return b.String()
+	}
+
+	// Actions menu
+	for i, action := range actionLabels {
+		selected := i == m.cursor
+		var line string
+		if selected {
+			line = theme.TitleSelectedStyle.Render(fmt.Sprintf("  ▶ %s  %s", action.icon, action.label))
+			line += "  " + theme.DimStyle.Render(action.desc)
+		} else {
+			line = theme.TextStyle.Render(fmt.Sprintf("    %s  %s", action.icon, action.label))
+			line += "  " + theme.DimStyle.Render(action.desc)
+		}
+		b.WriteString(line + "\n")
+	}
+
+	// Message
+	if m.message != "" {
+		b.WriteString("\n")
+		switch m.messageType {
+		case "ok":
+			b.WriteString("  " + theme.SuccessStyle.Render("✓ "+m.message))
+		case "error":
+			b.WriteString("  " + theme.ErrorStyle.Render("✗ "+m.message))
+		default:
+			b.WriteString("  " + theme.TextStyle.Render(m.message))
+		}
+		b.WriteString("\n")
+	}
+
+	if m.running {
+		b.WriteString("\n" + theme.DimStyle.Render("  Executando..."))
+	}
+
+	b.WriteString("\n" + theme.HelpStyle.Render("  ↑↓ navigate  enter execute  esc back"))
+
+	return b.String()
+}
+
+func (m *DockerActionsModel) SetSize(w, h int) {
+	m.width = w
+	m.height = h
+}
+
+func (m *DockerActionsModel) GoBack() bool { return m.goBack }
+
+func (m *DockerActionsModel) executeAction(action DockerAction) tea.Cmd {
+	m.running = true
+	m.message = ""
+	m.showLogs = false
+
+	composePath := m.cfg.ResolveDockerComposePath(m.stack)
+	projectName := filepath.Base(m.stack.Path)
+
+	switch action {
+	case ActionStart:
+		return func() tea.Msg {
+			err := m.docker.StartProject(composePath, projectName)
+			return dockerActionDoneMsg{action: "Iniciar", err: err}
+		}
+	case ActionStop:
+		return func() tea.Msg {
+			err := m.docker.StopProject(composePath, projectName)
+			return dockerActionDoneMsg{action: "Parar", err: err}
+		}
+	case ActionRestart:
+		return func() tea.Msg {
+			err := m.docker.RestartProject(composePath, projectName)
+			return dockerActionDoneMsg{action: "Reiniciar", err: err}
+		}
+	case ActionLogs:
+		return func() tea.Msg {
+			logs, err := m.docker.GetLogs(composePath, projectName, 50)
+			return dockerLogsMsg{logs: logs, err: err}
+		}
+	}
+	return nil
+}

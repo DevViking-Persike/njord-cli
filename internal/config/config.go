@@ -1,0 +1,185 @@
+package config
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/knadh/koanf/parsers/yaml"
+	"github.com/knadh/koanf/providers/file"
+	"github.com/knadh/koanf/v2"
+)
+
+type Settings struct {
+	Editor       string `koanf:"editor" yaml:"editor"`
+	ProjectsBase string `koanf:"projects_base" yaml:"projects_base"`
+	PersonalBase string `koanf:"personal_base" yaml:"personal_base"`
+}
+
+type Project struct {
+	Alias string `koanf:"alias" yaml:"alias"`
+	Desc  string `koanf:"desc" yaml:"desc"`
+	Path  string `koanf:"path" yaml:"path"`
+}
+
+type Category struct {
+	ID       string    `koanf:"id" yaml:"id"`
+	Name     string    `koanf:"name" yaml:"name"`
+	Sub      string    `koanf:"sub" yaml:"sub"`
+	Projects []Project `koanf:"projects" yaml:"projects"`
+}
+
+type DockerStack struct {
+	Name string `koanf:"name" yaml:"name"`
+	Desc string `koanf:"desc" yaml:"desc"`
+	Path string `koanf:"path" yaml:"path"`
+}
+
+type Config struct {
+	Settings     Settings      `koanf:"settings" yaml:"settings"`
+	Categories   []Category    `koanf:"categories" yaml:"categories"`
+	DockerStacks []DockerStack `koanf:"docker_stacks" yaml:"docker_stacks"`
+}
+
+func DefaultConfigPath() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".config", "njord", "njord.yaml")
+}
+
+func expandPath(path string) string {
+	if strings.HasPrefix(path, "~/") {
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, path[2:])
+	}
+	return path
+}
+
+func Load(path string) (*Config, error) {
+	if path == "" {
+		path = DefaultConfigPath()
+	}
+
+	k := koanf.New(".")
+	if err := k.Load(file.Provider(path), yaml.Parser()); err != nil {
+		return nil, fmt.Errorf("loading config: %w", err)
+	}
+
+	var cfg Config
+	if err := k.Unmarshal("", &cfg); err != nil {
+		return nil, fmt.Errorf("unmarshaling config: %w", err)
+	}
+
+	// Set defaults
+	if cfg.Settings.Editor == "" {
+		cfg.Settings.Editor = "code"
+	}
+	if cfg.Settings.ProjectsBase == "" {
+		cfg.Settings.ProjectsBase = "~/Avita"
+	}
+	if cfg.Settings.PersonalBase == "" {
+		cfg.Settings.PersonalBase = "~/Persike"
+	}
+
+	return &cfg, nil
+}
+
+func Save(cfg *Config, path string) error {
+	if path == "" {
+		path = DefaultConfigPath()
+	}
+
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("creating config dir: %w", err)
+	}
+
+	data, err := marshalYAML(cfg)
+	if err != nil {
+		return fmt.Errorf("marshaling config: %w", err)
+	}
+
+	return os.WriteFile(path, data, 0644)
+}
+
+// ResolveProjectPath returns the full filesystem path for a project.
+func (cfg *Config) ResolveProjectPath(p Project) string {
+	path := p.Path
+
+	// Special handlers
+	if strings.HasPrefix(path, "@") {
+		return path
+	}
+
+	// Personal projects (contain "Persike/")
+	if strings.Contains(path, "Persike/") || strings.HasPrefix(path, "Persike/") {
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, path)
+	}
+
+	// Environment projects
+	if strings.HasPrefix(path, "env/") {
+		base := expandPath(cfg.Settings.ProjectsBase)
+		return filepath.Join(base, path)
+	}
+
+	// Default: projects base
+	base := expandPath(cfg.Settings.ProjectsBase)
+	return filepath.Join(base, path)
+}
+
+// ResolveDockerComposePath returns the full path to docker-compose.yml for a stack.
+func (cfg *Config) ResolveDockerComposePath(stack DockerStack) string {
+	base := expandPath(cfg.Settings.ProjectsBase)
+	return filepath.Join(base, stack.Path, "docker-compose.yml")
+}
+
+// TotalProjects returns the total number of projects across all categories.
+func (cfg *Config) TotalProjects() int {
+	total := 0
+	for _, cat := range cfg.Categories {
+		total += len(cat.Projects)
+	}
+	return total
+}
+
+// AllProjects returns all projects from all categories.
+func (cfg *Config) AllProjects() []Project {
+	var all []Project
+	for _, cat := range cfg.Categories {
+		all = append(all, cat.Projects...)
+	}
+	return all
+}
+
+// marshalYAML produces a clean YAML output for the config.
+func marshalYAML(cfg *Config) ([]byte, error) {
+	var b strings.Builder
+
+	b.WriteString("settings:\n")
+	b.WriteString(fmt.Sprintf("  editor: %q\n", cfg.Settings.Editor))
+	b.WriteString(fmt.Sprintf("  projects_base: %q\n", cfg.Settings.ProjectsBase))
+	b.WriteString(fmt.Sprintf("  personal_base: %q\n", cfg.Settings.PersonalBase))
+
+	b.WriteString("\ncategories:\n")
+	for _, cat := range cfg.Categories {
+		b.WriteString(fmt.Sprintf("  - id: %s\n", cat.ID))
+		b.WriteString(fmt.Sprintf("    name: %q\n", cat.Name))
+		b.WriteString(fmt.Sprintf("    sub: %q\n", cat.Sub))
+		b.WriteString("    projects:\n")
+		for _, p := range cat.Projects {
+			b.WriteString(fmt.Sprintf("      - alias: %s\n", p.Alias))
+			b.WriteString(fmt.Sprintf("        desc: %q\n", p.Desc))
+			b.WriteString(fmt.Sprintf("        path: %s\n", p.Path))
+		}
+	}
+
+	b.WriteString("\ndocker_stacks:\n")
+	for _, s := range cfg.DockerStacks {
+		b.WriteString(fmt.Sprintf("  - name: %q\n", s.Name))
+		b.WriteString(fmt.Sprintf("    desc: %q\n", s.Desc))
+		b.WriteString(fmt.Sprintf("    path: %s\n", s.Path))
+	}
+
+	return []byte(b.String()), nil
+}

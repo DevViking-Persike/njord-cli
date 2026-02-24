@@ -1,0 +1,160 @@
+settings:
+  editor: "code"
+  projects_base: "~/Avita"
+  personal_base: "~/Persike"
+
+categories:
+  - id: vps
+    name: "VPS"
+    sub: "Acesso remoto"
+    projects:
+      - alias: tron
+        desc: "VPS Remoto via RDP (Cloudflare Tunnel)"
+        path: "@rdp"
+
+  - id: alfandega
+    name: "Alfandega"
+    sub: "Frontend + API"
+    projects:
+      - alias: avita-alfa
+        desc: "Alfandega Frontend Angular"
+        path: sgi-modulo-alfandega-angular-typescript
+      - alias: avita-api
+        desc: "Alfandega API .NET"
+        path: sgi-alfandega-gestao-api-dotnet
+
+  - id: jobs
+    name: "Jobs"
+    sub: "Processamento"
+    projects:
+      - alias: avita-proc
+        desc: "Alfandega Processamento Job"
+        path: sgi-alfandega-processamento-arquivo-job-dotnet
+      - alias: avita-valid
+        desc: "Alfandega Validacao Job"
+        path: sgi-alfandega-validacao-job-dotnet
+      - alias: avita-import
+        desc: "Alfandega Importacao Job"
+        path: sgi-alfandega-importacao-job-dotnet
+      - alias: avita-col
+        desc: "Pre-Alfandega Coleta Job"
+        path: sgi-pre-alfandega-coleta-job-dotnet
+      - alias: avita-pre-proc
+        desc: "Pre-Alfandega Processamento Job"
+        path: sgi-pre-alfandega-processamento-job-dotnet
+
+  - id: financeiro
+    name: "Financeiro"
+    sub: "Modulos financeiros"
+    projects:
+      - alias: avita-fin
+        desc: "SGA Modulo Financeiro Frontend"
+        path: sga-modulo-financeiro-angular-typescript
+      - alias: avita-fin-gs
+        desc: "FIN Gestao Financeira Frontend"
+        path: fin-modulo-gestao-financeira-angular-typescript
+      - alias: avita-fin-api
+        desc: "FIN Financeiro API .NET"
+        path: fin-financeiro-api-dotnet
+      - alias: avita-fin-gs-api
+        desc: "FIN Gestao Financeira API .NET"
+        path: fin-gestao-financeira-api-dotnet
+      - alias: avita-fin-domain-lib
+        desc: "Domain do Repo Fin"
+        path: fin-domain-library-dotnet
+      - alias: avita-fin-repository
+        desc: "Repo Fin"
+        path: fin-repository-library-dotnet
+
+  - id: core
+    name: "Core / APIs"
+    sub: "APIs e bibliotecas"
+    projects:
+      - alias: avita-sgo
+        desc: "SGO Backoffice API .NET"
+        path: sgo-backoffice-api-dotnet
+      - alias: avita-core
+        desc: "SGA API Core"
+        path: sga-api-core
+      - alias: avita-apol
+        desc: "SGA Apolice API"
+        path: sga-apolice-api-dotnet
+      - alias: avita-canc
+        desc: "SGA Cancelamento Manual API"
+        path: sga-cancelamento-manual-apolices-api-dotnet
+      - alias: avita-pan
+        desc: "PAN Notificacao API"
+        path: pan-notificacao-api-dotnet
+      - alias: avita-orq
+        desc: "PAN Orquestrador API"
+        path: pan-orquestrador-api-dotnet
+      - alias: avita-docs
+        desc: "Core Documents API"
+        path: core-documents-api-dotnet
+      - alias: avita-repo
+        desc: "SGA Core Repository Library"
+        path: sga-core-repository-library-dotnet
+      - alias: avita-domain
+        desc: "SGA Domain Library .NET"
+        path: sga-domain-library-dotnet
+      - alias: avita-plat
+        desc: "Plataforma Portal Admin"
+        path: plat-portal-admin-angular-typescript
+
+  - id: banco
+    name: "Banco de Dados"
+    sub: "DDL + DML"
+    projects:
+      - alias: avita-ddl
+        desc: "SGA DDL Liquibase"
+        path: sga-ddl-db-liquibase-sql
+      - alias: avita-dml
+        desc: "SGA DML Liquibase"
+        path: sga-dml-db-liquibase-sql
+      - alias: avita-fin-db-relator
+        desc: "DB Liquid Financeiro"
+        path: fin-db-relatorio-ddl-db-liquibase-sql
+
+  - id: infra
+    name: "Infra"
+    sub: "Stack dev"
+    projects:
+      - alias: avita-gap
+        desc: "GAP Stack Desenvolvimento"
+        path: gap-stack-desenvolvimento
+
+  - id: env
+    name: "ENV"
+    sub: "Ambientes"
+    projects:
+      - alias: env-canc
+        desc: "SGA Cancelamento Manual API (ENV)"
+        path: env/sga-cancelamento-manual-apolices-api-dotnet
+
+  - id: pessoal
+    name: "Pessoal"
+    sub: "Projetos pessoais"
+    projects:
+      - alias: uni-front
+        desc: "App Unificado Frontend"
+        path: Persike/ProjetoUnificado/AppUnificado
+      - alias: uni-back
+        desc: "App Unificado Backend"
+        path: Persike/ProjetoUnificado/AppUnificadoBack
+      - alias: RPAs
+        desc: "99frela - RPAs"
+        path: Persike/99frela
+      - alias: ares-llm
+        desc: "vm local llm"
+        path: Persike/ares-llm
+
+docker_stacks:
+  - name: "GAP Stack"
+    desc: "MySQL Database (porta 3306)"
+    path: gap-stack-desenvolvimento
+  - name: "Cancelamento"
+    desc: "APIs + MongoDB"
+    path: sga-cancelamento-manual-apolices-api-dotnet
+  - name: "Alfandega Jobs"
+    desc: "Jobs Alfandega"
+    path: sgi-modulo-alfandega-angular-typescript
