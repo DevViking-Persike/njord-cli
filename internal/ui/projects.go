@@ -147,7 +147,9 @@ func (m ProjectsModel) View() string {
 func (m *ProjectsModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
-	m.list.SetSize(w-2, h-4)
+	if m.cfg != nil {
+		m.list.SetSize(w-2, h-4)
+	}
 }
 
 func (m *ProjectsModel) Selected() *config.Project {

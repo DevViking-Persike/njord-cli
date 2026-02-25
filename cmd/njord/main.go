@@ -8,6 +8,8 @@ import (
 	"github.com/DevViking-Persike/njord-cli/internal/docker"
 	"github.com/DevViking-Persike/njord-cli/internal/ui"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 	"github.com/spf13/cobra"
 )
 
@@ -64,6 +66,11 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	if dockerClient != nil {
 		defer dockerClient.Close()
 	}
+
+	// Lipgloss default renderer targets stdout, but the TUI renders to stderr.
+	// Repoint the existing renderer's output to stderr so all styles (which
+	// already hold a pointer to it from package init) detect color correctly.
+	lipgloss.DefaultRenderer().SetOutput(termenv.NewOutput(os.Stderr))
 
 	app := ui.NewApp(cfg, dockerClient, configPath)
 

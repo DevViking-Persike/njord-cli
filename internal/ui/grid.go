@@ -18,6 +18,25 @@ const (
 	GridItemAdd
 )
 
+const (
+	minCardWidth   = 30 // minimum card content width (without borders)
+	borderOverhead = 2  // left + right borders
+)
+
+const (
+	vikingShipSail = "" +
+		"            │▸\n" +
+		"       ╔════╤════╗\n" +
+		"       ║░▒▓▓│▓▓▒░║\n" +
+		"       ║░▒▓▓│▓▓▒░║\n" +
+		"       ║░▒▓▓│▓▓▒░║\n" +
+		"       ╚════╧════╝"
+
+	vikingShipHull = "" +
+		" ▄▟▀▀▀▀▀▀▀▀▀│▀▀▀▀▀▀▀▀▀▜▄\n" +
+		"   ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀"
+)
+
 type GridItem struct {
 	Type  GridItemType
 	CatID string
@@ -32,13 +51,14 @@ type GridSelection struct {
 }
 
 type GridModel struct {
-	items    []GridItem
-	cursor   int
-	cols     int
-	width    int
-	height   int
-	selected *GridSelection
-	offset   int // scroll offset in rows
+	items     []GridItem
+	cursor    int
+	cols      int
+	cardWidth int
+	width     int
+	height    int
+	selected  *GridSelection
+	offset    int // scroll offset in rows
 }
 
 func NewGridModel(cfg *config.Config) GridModel {
@@ -80,8 +100,9 @@ func NewGridModel(cfg *config.Config) GridModel {
 	})
 
 	return GridModel{
-		items: items,
-		cols:  2,
+		items:     items,
+		cols:      2,
+		cardWidth: 36,
 	}
 }
 
@@ -129,8 +150,19 @@ func (m GridModel) Update(msg tea.Msg) (GridModel, tea.Cmd) {
 func (m GridModel) View() string {
 	var b strings.Builder
 
-	// Header
-	header := theme.HeaderStyle.Render("  Njord")
+	// Header with Viking ship pixel art (sail + hull in different colors)
+	sailStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#c0392b"))
+	hullStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#b8860b"))
+	shipArt := lipgloss.JoinVertical(lipgloss.Left,
+		sailStyle.Render(vikingShipSail),
+		hullStyle.Render(vikingShipHull),
+	)
+
+	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.Title)
+	runeStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.BorderSel)
+	title := runeStyle.Render("ᚾ") + " " + titleStyle.Render("Njord")
+
+	header := lipgloss.JoinHorizontal(lipgloss.Center, "  ", shipArt, "  ", title)
 	b.WriteString(header)
 	b.WriteString("\n\n")
 
@@ -150,7 +182,7 @@ func (m GridModel) View() string {
 			idx := row*m.cols + col
 			if idx >= len(m.items) {
 				// Empty cell
-				rowCards = append(rowCards, strings.Repeat(" ", 38))
+				rowCards = append(rowCards, strings.Repeat(" ", m.cardWidth+borderOverhead))
 				continue
 			}
 			item := m.items[idx]
@@ -173,6 +205,31 @@ func (m GridModel) View() string {
 func (m *GridModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
+	m.recalcLayout()
+	if m.cursor >= len(m.items) {
+		m.cursor = len(m.items) - 1
+	}
+	m.ensureVisible()
+}
+
+func (m *GridModel) recalcLayout() {
+	if m.width <= 0 {
+		return
+	}
+
+	maxCols := m.width / (minCardWidth + borderOverhead)
+	if maxCols < 1 {
+		maxCols = 1
+	}
+	if maxCols > 5 {
+		maxCols = 5
+	}
+	if maxCols > len(m.items) {
+		maxCols = len(m.items)
+	}
+
+	m.cols = maxCols
+	m.cardWidth = (m.width / m.cols) - borderOverhead
 }
 
 func (m *GridModel) Selected() *GridSelection {
@@ -184,54 +241,67 @@ func (m *GridModel) ClearSelection() {
 }
 
 func (m GridModel) renderCard(item GridItem, selected bool) string {
-	var cardStyle, titleStyle lipgloss.Style
+	var cardStyle, titleStyle, subStyle, countStyle lipgloss.Style
 
 	switch item.Type {
 	case GridItemDocker:
 		if selected {
 			cardStyle = theme.DockerCardSelectedStyle
 			titleStyle = theme.DockerTitleSelectedStyle
+			subStyle = theme.SubSelectedStyle
+			countStyle = theme.CountSelectedStyle
 		} else {
 			cardStyle = theme.DockerCardStyle
 			titleStyle = theme.DockerTitleStyle
+			subStyle = theme.SubStyle
+			countStyle = theme.CountStyle
 		}
 	case GridItemAdd:
 		if selected {
 			cardStyle = theme.AddCardSelectedStyle
 			titleStyle = theme.AddTitleSelectedStyle
+			subStyle = theme.SubSelectedStyle
+			countStyle = theme.CountSelectedStyle
 		} else {
 			cardStyle = theme.AddCardStyle
 			titleStyle = theme.AddTitleStyle
+			subStyle = theme.SubStyle
+			countStyle = theme.CountStyle
 		}
 	default:
 		if selected {
 			cardStyle = theme.CardSelectedStyle
 			titleStyle = theme.TitleSelectedStyle
+			subStyle = theme.SubSelectedStyle
+			countStyle = theme.CountSelectedStyle
 		} else {
 			cardStyle = theme.CardStyle
 			titleStyle = theme.TitleStyle
+			subStyle = theme.SubStyle
+			countStyle = theme.CountStyle
 		}
 	}
 
 	name := titleStyle.Render(item.Name)
-	sub := theme.SubStyle.Render(item.Sub)
+	sub := subStyle.Render(item.Sub)
 
 	var count string
 	if item.Type == GridItemAdd {
 		count = ""
 	} else {
-		count = theme.CountStyle.Render(fmt.Sprintf("%d projetos", item.Count))
+		count = countStyle.Render(fmt.Sprintf("%d projetos", item.Count))
 	}
 
+	cardStyle = cardStyle.Width(m.cardWidth)
 	content := lipgloss.JoinVertical(lipgloss.Left, name, sub, count)
 	return cardStyle.Render(content)
 }
 
 func (m GridModel) visibleRows() int {
 	// Each card row is ~5 lines (border + padding + content)
-	// Header takes ~3 lines, help takes ~2 lines
+	// Header (ship art) takes ~10 lines, help takes ~2 lines
 	cardHeight := 6
-	available := m.height - 5
+	available := m.height - 12
 	if available < cardHeight {
 		return 1
 	}

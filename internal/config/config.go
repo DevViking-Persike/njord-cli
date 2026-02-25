@@ -170,7 +170,7 @@ func marshalYAML(cfg *Config) ([]byte, error) {
 		for _, p := range cat.Projects {
 			b.WriteString(fmt.Sprintf("      - alias: %s\n", p.Alias))
 			b.WriteString(fmt.Sprintf("        desc: %q\n", p.Desc))
-			b.WriteString(fmt.Sprintf("        path: %s\n", p.Path))
+			b.WriteString(fmt.Sprintf("        path: %q\n", p.Path))
 		}
 	}
 
@@ -178,7 +178,7 @@ func marshalYAML(cfg *Config) ([]byte, error) {
 	for _, s := range cfg.DockerStacks {
 		b.WriteString(fmt.Sprintf("  - name: %q\n", s.Name))
 		b.WriteString(fmt.Sprintf("    desc: %q\n", s.Desc))
-		b.WriteString(fmt.Sprintf("    path: %s\n", s.Path))
+		b.WriteString(fmt.Sprintf("    path: %q\n", s.Path))
 	}
 
 	return []byte(b.String()), nil

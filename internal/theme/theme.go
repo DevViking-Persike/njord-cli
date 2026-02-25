@@ -2,28 +2,30 @@ package theme
 
 import "github.com/charmbracelet/lipgloss"
 
-// Tokyo Night color palette
+// Orange color palette
 var (
-	Border    = lipgloss.Color("#7aa2f7")
-	BorderSel = lipgloss.Color("#ff9e64")
-	Title     = lipgloss.Color("#7dcfff")
-	TitleSel  = lipgloss.Color("#ff9e64")
-	Sub       = lipgloss.Color("#9ece6a")
-	Text      = lipgloss.Color("#c0caf5")
-	Dim       = lipgloss.Color("#565f89")
-	BgSel     = lipgloss.Color("#2e3c64")
+	Border    = lipgloss.Color("#e07020")
+	BorderSel = lipgloss.Color("#ff9800")
+	Title     = lipgloss.Color("#ff8c00")
+	TitleSel  = lipgloss.Color("#ffb74d")
+	Sub       = lipgloss.Color("#ffcc80")
+	SubSel    = lipgloss.Color("#ffe0b2")
+	Text      = lipgloss.Color("#ffdab9")
+	Dim       = lipgloss.Color("#8b6508")
+	DimSel    = lipgloss.Color("#daa520")
+	BgSel     = lipgloss.Color("#4e2a00")
 
-	DockerBlue    = lipgloss.Color("#2496ed")
-	DockerBlueSel = lipgloss.Color("#50b4ff")
-	DockerBgSel   = lipgloss.Color("#1e375a")
+	DockerBlue    = lipgloss.Color("#e67e22")
+	DockerBlueSel = lipgloss.Color("#f0a04b")
+	DockerBgSel   = lipgloss.Color("#5c3300")
 
-	AddGreen    = lipgloss.Color("#9ece6a")
-	AddGreenSel = lipgloss.Color("#bee68c")
-	AddBgSel    = lipgloss.Color("#28463c")
+	AddGreen    = lipgloss.Color("#ffc107")
+	AddGreenSel = lipgloss.Color("#ffd54f")
+	AddBgSel    = lipgloss.Color("#4e3800")
 
-	Error   = lipgloss.Color("#f7768e")
-	Warning = lipgloss.Color("#ff9e64")
-	Success = lipgloss.Color("#9ece6a")
+	Error   = lipgloss.Color("#ff6b6b")
+	Warning = lipgloss.Color("#ffb347")
+	Success = lipgloss.Color("#ffd700")
 )
 
 // Card styles
@@ -35,7 +37,7 @@ var (
 			Width(36)
 
 	CardSelectedStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
+				Border(lipgloss.DoubleBorder()).
 				BorderForeground(BorderSel).
 				Padding(0, 1).
 				Width(36).
@@ -48,7 +50,7 @@ var (
 			Width(36)
 
 	DockerCardSelectedStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
+				Border(lipgloss.DoubleBorder()).
 				BorderForeground(DockerBlueSel).
 				Padding(0, 1).
 				Width(36).
@@ -61,7 +63,7 @@ var (
 			Width(36)
 
 	AddCardSelectedStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
+				Border(lipgloss.DoubleBorder()).
 				BorderForeground(AddGreenSel).
 				Padding(0, 1).
 				Width(36).
@@ -78,8 +80,15 @@ var (
 	SubStyle = lipgloss.NewStyle().
 			Foreground(Sub)
 
+	SubSelectedStyle = lipgloss.NewStyle().
+				Foreground(SubSel).
+				Bold(true)
+
 	CountStyle = lipgloss.NewStyle().
 			Foreground(Dim)
+
+	CountSelectedStyle = lipgloss.NewStyle().
+				Foreground(DimSel)
 
 	TextStyle = lipgloss.NewStyle().
 			Foreground(Text)
