@@ -17,6 +17,7 @@ const (
 	ScreenDockerActions
 	ScreenAddProject
 	ScreenAddStack
+	ScreenSettings
 )
 
 // Result is the final output from the TUI.
@@ -40,6 +41,7 @@ type AppModel struct {
 	dockerActions DockerActionsModel
 	addProject    AddProjectModel
 	addStack      AddStackModel
+	settings      SettingsModel
 
 	// Context for transitions
 	selectedCatID string
@@ -74,6 +76,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dockerActions.SetSize(msg.Width, msg.Height)
 		m.addProject.SetSize(msg.Width, msg.Height)
 		m.addStack.SetSize(msg.Width, msg.Height)
+		m.settings.SetSize(msg.Width, msg.Height)
 		return m, nil
 
 	case tea.KeyMsg:
@@ -96,6 +99,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateAddProject(msg)
 	case ScreenAddStack:
 		return m.updateAddStack(msg)
+	case ScreenSettings:
+		return m.updateSettings(msg)
 	}
 
 	return m, nil
@@ -120,6 +125,8 @@ func (m AppModel) View() string {
 		content = m.addProject.View()
 	case ScreenAddStack:
 		content = m.addStack.View()
+	case ScreenSettings:
+		content = m.settings.View()
 	}
 
 	help := theme.HelpStyle.Render("  ↑↓←→ navigate  enter select  esc back  q quit")
@@ -167,10 +174,16 @@ func (m AppModel) updateGrid(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.dockerScreen.Init()
 
 		case GridItemAdd:
-			m.addProject = NewAddProjectModel(m.config, m.docker, m.configPath)
+			m.addProject = NewAddProjectModel(m.config, m.configPath)
 			m.addProject.SetSize(m.width, m.height)
 			m.screen = ScreenAddProject
 			return m, m.addProject.Init()
+
+		case GridItemSettings:
+			m.settings = NewSettingsModel(m.config, m.configPath)
+			m.settings.SetSize(m.width, m.height)
+			m.screen = ScreenSettings
+			return m, m.settings.Init()
 		}
 	}
 
@@ -276,6 +289,24 @@ func (m AppModel) updateAddStack(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dockerScreen.SetSize(m.width, m.height)
 		m.screen = ScreenDocker
 		return m, m.dockerScreen.Init()
+	}
+
+	return m, cmd
+}
+
+func (m AppModel) updateSettings(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.settings, cmd = m.settings.Update(msg)
+
+	if m.settings.GoBack() {
+		// Reload config in case it was modified
+		if updated, err := config.Load(m.configPath); err == nil {
+			m.config = updated
+			m.grid = NewGridModel(m.config)
+			m.grid.SetSize(m.width, m.height)
+		}
+		m.screen = ScreenGrid
+		return m, nil
 	}
 
 	return m, cmd

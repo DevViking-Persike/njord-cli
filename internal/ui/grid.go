@@ -16,6 +16,7 @@ const (
 	GridItemCategory GridItemType = iota
 	GridItemDocker
 	GridItemAdd
+	GridItemSettings
 )
 
 const (
@@ -97,6 +98,13 @@ func NewGridModel(cfg *config.Config) GridModel {
 		Type: GridItemAdd,
 		Name: "+ Adicionar",
 		Sub:  "Novo projeto",
+	})
+
+	// Settings card
+	items = append(items, GridItem{
+		Type: GridItemSettings,
+		Name: "Configurações",
+		Sub:  "Editar categorias e paths",
 	})
 
 	return GridModel{
@@ -268,6 +276,18 @@ func (m GridModel) renderCard(item GridItem, selected bool) string {
 			subStyle = theme.SubStyle
 			countStyle = theme.CountStyle
 		}
+	case GridItemSettings:
+		if selected {
+			cardStyle = theme.SettingsCardSelectedStyle
+			titleStyle = theme.SettingsTitleSelectedStyle
+			subStyle = theme.SubSelectedStyle
+			countStyle = theme.CountSelectedStyle
+		} else {
+			cardStyle = theme.SettingsCardStyle
+			titleStyle = theme.SettingsTitleStyle
+			subStyle = theme.SubStyle
+			countStyle = theme.CountStyle
+		}
 	default:
 		if selected {
 			cardStyle = theme.CardSelectedStyle
@@ -286,7 +306,7 @@ func (m GridModel) renderCard(item GridItem, selected bool) string {
 	sub := subStyle.Render(item.Sub)
 
 	var count string
-	if item.Type == GridItemAdd {
+	if item.Type == GridItemAdd || item.Type == GridItemSettings {
 		count = ""
 	} else {
 		count = countStyle.Render(fmt.Sprintf("%d projetos", item.Count))

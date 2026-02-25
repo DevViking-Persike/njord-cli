@@ -23,6 +23,10 @@ var (
 	AddGreenSel = lipgloss.Color("#ffd54f")
 	AddBgSel    = lipgloss.Color("#4e3800")
 
+	SettingsGray    = lipgloss.Color("#90a4ae")
+	SettingsGraySel = lipgloss.Color("#b0bec5")
+	SettingsBgSel   = lipgloss.Color("#37474f")
+
 	Error   = lipgloss.Color("#ff6b6b")
 	Warning = lipgloss.Color("#ffb347")
 	Success = lipgloss.Color("#ffd700")
@@ -120,6 +124,27 @@ var (
 	AddTitleSelectedStyle = lipgloss.NewStyle().
 				Bold(true).
 				Foreground(AddGreenSel)
+
+	SettingsCardStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(SettingsGray).
+				Padding(0, 1).
+				Width(36)
+
+	SettingsCardSelectedStyle = lipgloss.NewStyle().
+					Border(lipgloss.DoubleBorder()).
+					BorderForeground(SettingsGraySel).
+					Padding(0, 1).
+					Width(36).
+					Background(SettingsBgSel)
+
+	SettingsTitleStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(SettingsGray)
+
+	SettingsTitleSelectedStyle = lipgloss.NewStyle().
+					Bold(true).
+					Foreground(SettingsGraySel)
 
 	HeaderStyle = lipgloss.NewStyle().
 			Bold(true).

@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/DevViking-Persike/njord-cli/internal/config"
-	"github.com/DevViking-Persike/njord-cli/internal/docker"
 	"github.com/DevViking-Persike/njord-cli/internal/theme"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -23,6 +22,8 @@ const (
 	stepAlias
 	stepDescription
 	stepCategory
+	stepCustomCatName
+	stepCustomCatSub
 	stepConfirm
 	stepDone
 )
@@ -33,7 +34,6 @@ type cloneDoneMsg struct {
 
 type AddProjectModel struct {
 	cfg        *config.Config
-	docker     *docker.Client
 	configPath string
 	step       addStep
 	goBack     bool
@@ -59,10 +59,9 @@ type AddProjectModel struct {
 	height      int
 }
 
-func NewAddProjectModel(cfg *config.Config, dockerClient *docker.Client, configPath string) AddProjectModel {
+func NewAddProjectModel(cfg *config.Config, configPath string) AddProjectModel {
 	return AddProjectModel{
 		cfg:        cfg,
-		docker:     dockerClient,
 		configPath: configPath,
 		step:       stepGitURL,
 	}
@@ -107,6 +106,10 @@ func (m AddProjectModel) Update(msg tea.Msg) (AddProjectModel, tea.Cmd) {
 			return m.handleTextInput(msg)
 		case stepCategory:
 			return m.handleCategorySelect(msg)
+		case stepCustomCatName:
+			return m.handleTextInput(msg)
+		case stepCustomCatSub:
+			return m.handleTextInput(msg)
 		case stepConfirm:
 			return m.handleConfirm(msg)
 		case stepDone:
@@ -127,15 +130,32 @@ func (m AddProjectModel) View() string {
 	b.WriteString("\n" + header + "\n" + divider + "\n\n")
 
 	// Progress
-	steps := []string{"URL", "Destino", "Clone", "Alias", "Desc", "Categoria", "Confirmar"}
+	type progressStep struct {
+		name string
+		step addStep
+	}
+	progressSteps := []progressStep{
+		{"URL", stepGitURL},
+		{"Destino", stepDestination},
+		{"Clone", stepClone},
+		{"Alias", stepAlias},
+		{"Desc", stepDescription},
+		{"Categoria", stepCategory},
+		{"Confirmar", stepConfirm},
+	}
+	// Map custom cat steps to the Categoria step for progress display
+	displayStep := m.step
+	if displayStep == stepCustomCatName || displayStep == stepCustomCatSub {
+		displayStep = stepCategory
+	}
 	var progress string
-	for i, s := range steps {
-		if addStep(i) == m.step {
-			progress += theme.TitleSelectedStyle.Render("["+s+"]") + " "
-		} else if addStep(i) < m.step {
-			progress += theme.SuccessStyle.Render("✓"+s) + " "
+	for _, ps := range progressSteps {
+		if ps.step == displayStep {
+			progress += theme.TitleSelectedStyle.Render("["+ps.name+"]") + " "
+		} else if ps.step < displayStep {
+			progress += theme.SuccessStyle.Render("✓"+ps.name) + " "
 		} else {
-			progress += theme.DimStyle.Render(s) + " "
+			progress += theme.DimStyle.Render(ps.name) + " "
 		}
 	}
 	b.WriteString("  " + progress + "\n\n")
@@ -190,6 +210,22 @@ func (m AddProjectModel) View() string {
 		}
 		b.WriteString("\n" + theme.HelpStyle.Render("  ↑↓ navigate  enter select  esc back"))
 
+	case stepCustomCatName:
+		b.WriteString("  " + theme.TextStyle.Render("Nome da nova categoria:") + "\n\n")
+		b.WriteString("  " + theme.TitleStyle.Render("> ") + m.inputBuf + theme.DimStyle.Render("█") + "\n")
+		if m.message != "" {
+			b.WriteString("\n  " + theme.ErrorStyle.Render(m.message) + "\n")
+		}
+		b.WriteString("\n" + theme.HelpStyle.Render("  enter confirmar  esc back"))
+
+	case stepCustomCatSub:
+		b.WriteString("  " + theme.TextStyle.Render("Descrição da categoria:") + "\n\n")
+		b.WriteString("  " + theme.TitleStyle.Render("> ") + m.inputBuf + theme.DimStyle.Render("█") + "\n")
+		if m.message != "" {
+			b.WriteString("\n  " + theme.ErrorStyle.Render(m.message) + "\n")
+		}
+		b.WriteString("\n" + theme.HelpStyle.Render("  enter confirmar  esc back"))
+
 	case stepConfirm:
 		b.WriteString("  " + theme.TextStyle.Render("Confirmar adição:") + "\n\n")
 		b.WriteString("  " + theme.DimStyle.Render("URL:     ") + theme.TextStyle.Render(m.gitURL) + "\n")
@@ -234,6 +270,13 @@ func (m AddProjectModel) handleTextInput(msg tea.KeyMsg) (AddProjectModel, tea.C
 	case "esc":
 		if m.step == stepGitURL {
 			m.goBack = true
+		} else if m.step == stepCustomCatName {
+			m.step = stepCategory
+			m.message = ""
+		} else if m.step == stepCustomCatSub {
+			m.step = stepCustomCatName
+			m.inputBuf = m.newCatName
+			m.message = ""
 		} else {
 			m.step--
 			m.message = ""
@@ -248,8 +291,8 @@ func (m AddProjectModel) handleTextInput(msg tea.KeyMsg) (AddProjectModel, tea.C
 	case "ctrl+u":
 		m.inputBuf = ""
 	default:
-		if len(msg.String()) == 1 || msg.String() == " " {
-			m.inputBuf += msg.String()
+		if msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace {
+			m.inputBuf += string(msg.Runes)
 		}
 	}
 	return m, nil
@@ -287,7 +330,7 @@ func (m AddProjectModel) submitTextInput() (AddProjectModel, tea.Cmd) {
 			}
 		}
 		m.alias = alias
-		m.inputBuf = ""
+		m.inputBuf = extractRepoName(m.gitURL)
 		m.message = ""
 		m.step = stepDescription
 		return m, nil
@@ -306,6 +349,32 @@ func (m AddProjectModel) submitTextInput() (AddProjectModel, tea.Cmd) {
 		m.options = append(m.options, "+ Nova categoria")
 		m.cursor = 0
 		m.step = stepCategory
+		return m, nil
+
+	case stepCustomCatName:
+		name := strings.TrimSpace(m.inputBuf)
+		if name == "" {
+			m.message = "Nome não pode ser vazio"
+			return m, nil
+		}
+		m.newCatName = name
+		m.categoryID = strings.ToLower(strings.ReplaceAll(name, " ", "-"))
+		m.inputBuf = ""
+		m.message = ""
+		m.step = stepCustomCatSub
+		return m, nil
+
+	case stepCustomCatSub:
+		sub := strings.TrimSpace(m.inputBuf)
+		if sub == "" {
+			m.message = "Descrição não pode ser vazia"
+			return m, nil
+		}
+		m.newCatSub = sub
+		m.inputBuf = ""
+		m.message = ""
+		m.cursor = 0
+		m.step = stepConfirm
 		return m, nil
 	}
 	return m, nil
@@ -372,13 +441,13 @@ func (m AddProjectModel) handleCategorySelect(msg tea.KeyMsg) (AddProjectModel, 
 	case "enter":
 		if m.cursor < len(m.cfg.Categories) {
 			m.categoryID = m.cfg.Categories[m.cursor].ID
+			m.cursor = 0
+			m.step = stepConfirm
 		} else {
-			m.categoryID = "custom"
-			m.newCatName = "Custom"
-			m.newCatSub = "Projetos customizados"
+			m.inputBuf = ""
+			m.message = ""
+			m.step = stepCustomCatName
 		}
-		m.cursor = 0
-		m.step = stepConfirm
 	}
 	return m, nil
 }
@@ -398,7 +467,15 @@ func (m AddProjectModel) handleConfirm(msg tea.KeyMsg) (AddProjectModel, tea.Cmd
 		m.step = stepCategory
 	case "enter":
 		if m.cursor == 0 {
-			return m, m.saveProject()
+			if err := m.saveProject(); err != nil {
+				m.message = fmt.Sprintf("Erro ao salvar: %s", err)
+				m.messageType = "error"
+			} else {
+				m.message = "Projeto salvo!"
+				m.messageType = "ok"
+			}
+			m.step = stepDone
+			return m, nil
 		}
 		m.goBack = true
 	}
@@ -418,56 +495,45 @@ func (m AddProjectModel) doClone() tea.Cmd {
 	}
 }
 
-func (m AddProjectModel) saveProject() tea.Cmd {
-	return func() tea.Msg {
-		var relPath string
-		home, _ := os.UserHomeDir()
-		avitaBase := filepath.Join(home, "Avita")
-		persBase := filepath.Join(home, "Persike")
+func (m *AddProjectModel) saveProject() error {
+	var relPath string
+	home, _ := os.UserHomeDir()
+	avitaBase := filepath.Join(home, "Avita")
+	persBase := filepath.Join(home, "Persike")
 
-		if strings.HasPrefix(m.clonePath, avitaBase) {
-			relPath, _ = filepath.Rel(avitaBase, m.clonePath)
-		} else if strings.HasPrefix(m.clonePath, persBase) {
-			relPath = "Persike/" + filepath.Base(m.clonePath)
-		} else {
-			relPath = m.clonePath
-		}
-
-		project := config.Project{
-			Alias: m.alias,
-			Desc:  m.description,
-			Path:  relPath,
-		}
-
-		found := false
-		for i, cat := range m.cfg.Categories {
-			if cat.ID == m.categoryID {
-				m.cfg.Categories[i].Projects = append(m.cfg.Categories[i].Projects, project)
-				found = true
-				break
-			}
-		}
-
-		if !found && m.categoryID == "custom" {
-			m.cfg.Categories = append(m.cfg.Categories, config.Category{
-				ID:       "custom",
-				Name:     m.newCatName,
-				Sub:      m.newCatSub,
-				Projects: []config.Project{project},
-			})
-		}
-
-		if err := config.Save(m.cfg, m.configPath); err != nil {
-			m.message = fmt.Sprintf("Erro ao salvar: %s", err)
-			m.messageType = "error"
-		} else {
-			m.message = "Projeto salvo!"
-			m.messageType = "ok"
-		}
-
-		m.step = stepDone
-		return nil
+	if strings.HasPrefix(m.clonePath, avitaBase) {
+		relPath, _ = filepath.Rel(avitaBase, m.clonePath)
+	} else if strings.HasPrefix(m.clonePath, persBase) {
+		relPath = "Persike/" + filepath.Base(m.clonePath)
+	} else {
+		relPath = m.clonePath
 	}
+
+	project := config.Project{
+		Alias: m.alias,
+		Desc:  m.description,
+		Path:  relPath,
+	}
+
+	found := false
+	for i, cat := range m.cfg.Categories {
+		if cat.ID == m.categoryID {
+			m.cfg.Categories[i].Projects = append(m.cfg.Categories[i].Projects, project)
+			found = true
+			break
+		}
+	}
+
+	if !found && m.newCatName != "" {
+		m.cfg.Categories = append(m.cfg.Categories, config.Category{
+			ID:       m.categoryID,
+			Name:     m.newCatName,
+			Sub:      m.newCatSub,
+			Projects: []config.Project{project},
+		})
+	}
+
+	return config.Save(m.cfg, m.configPath)
 }
 
 func extractRepoName(url string) string {

@@ -196,8 +196,8 @@ func (m AddStackModel) handleNameInput(msg tea.KeyMsg) (AddStackModel, tea.Cmd) 
 	case "ctrl+u":
 		m.inputBuf = ""
 	default:
-		if len(msg.String()) == 1 || msg.String() == " " {
-			m.inputBuf += msg.String()
+		if msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace {
+			m.inputBuf += string(msg.Runes)
 		}
 	}
 	return m, nil
@@ -224,8 +224,8 @@ func (m AddStackModel) handleDescInput(msg tea.KeyMsg) (AddStackModel, tea.Cmd) 
 	case "ctrl+u":
 		m.inputBuf = ""
 	default:
-		if len(msg.String()) == 1 || msg.String() == " " {
-			m.inputBuf += msg.String()
+		if msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace {
+			m.inputBuf += string(msg.Runes)
 		}
 	}
 	return m, nil
