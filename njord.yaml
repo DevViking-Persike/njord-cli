@@ -117,11 +117,14 @@ categories:
 
   - id: infra
     name: "Infra"
-    sub: "Stack dev"
+    sub: "Stack dev + K3s"
     projects:
       - alias: avita-gap
         desc: "GAP Stack Desenvolvimento"
         path: gap-stack-desenvolvimento
+      - alias: k3s
+        desc: "Implementacao K3s Multi-Node (Oracle + Contabo)"
+        path: Persike/implementacao-k3s
 
   - id: env
     name: "ENV"

@@ -203,7 +203,7 @@ func (m AppModel) updateProjects(msg tea.Msg) (tea.Model, tea.Cmd) {
 		path := m.config.ResolveProjectPath(*proj)
 
 		if path == "@rdp" {
-			m.result = &Result{Command: "gnome-terminal -- bash -c 'echo \"Connecting to RDP...\"; sleep 1' &"}
+			m.result = &Result{Command: "gnome-terminal --title='TRON - VPS RDP' -- bash -c 'echo \"Conectando à VPS via RDP...\"; echo \"Use o cliente RDP em localhost:3390\"; echo \"\"; cloudflared access rdp --hostname tron.victorpersike.dev.br --url localhost:3390; exec bash' &"}
 		} else {
 			editor := m.config.Settings.Editor
 			m.result = &Result{Command: "cd " + shellQuote(path) + " && " + editor + " ."}
