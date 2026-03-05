@@ -24,6 +24,8 @@ const (
 	stepCategory
 	stepCustomCatName
 	stepCustomCatSub
+	stepGroup
+	stepCustomGroup
 	stepConfirm
 	stepDone
 )
@@ -47,6 +49,7 @@ type AddProjectModel struct {
 	categoryID  string
 	newCatName  string
 	newCatSub   string
+	group       string
 
 	// UI state
 	inputBuf    string
@@ -110,6 +113,10 @@ func (m AddProjectModel) Update(msg tea.Msg) (AddProjectModel, tea.Cmd) {
 			return m.handleTextInput(msg)
 		case stepCustomCatSub:
 			return m.handleTextInput(msg)
+		case stepGroup:
+			return m.handleGroupSelect(msg)
+		case stepCustomGroup:
+			return m.handleTextInput(msg)
 		case stepConfirm:
 			return m.handleConfirm(msg)
 		case stepDone:
@@ -141,12 +148,16 @@ func (m AddProjectModel) View() string {
 		{"Alias", stepAlias},
 		{"Desc", stepDescription},
 		{"Categoria", stepCategory},
+		{"Grupo", stepGroup},
 		{"Confirmar", stepConfirm},
 	}
 	// Map custom cat steps to the Categoria step for progress display
 	displayStep := m.step
 	if displayStep == stepCustomCatName || displayStep == stepCustomCatSub {
 		displayStep = stepCategory
+	}
+	if displayStep == stepCustomGroup {
+		displayStep = stepGroup
 	}
 	var progress string
 	for _, ps := range progressSteps {
@@ -226,13 +237,36 @@ func (m AddProjectModel) View() string {
 		}
 		b.WriteString("\n" + theme.HelpStyle.Render("  enter confirmar  esc back"))
 
+	case stepGroup:
+		b.WriteString("  " + theme.TextStyle.Render("Grupo (subdivisão):") + "\n\n")
+		for i, opt := range m.options {
+			if i == m.cursor {
+				b.WriteString("  " + theme.TitleSelectedStyle.Render("▶ "+opt) + "\n")
+			} else {
+				b.WriteString("  " + theme.TextStyle.Render("  "+opt) + "\n")
+			}
+		}
+		b.WriteString("\n" + theme.HelpStyle.Render("  ↑↓ navigate  enter select  esc back"))
+
+	case stepCustomGroup:
+		b.WriteString("  " + theme.TextStyle.Render("Nome do novo grupo:") + "\n\n")
+		b.WriteString("  " + theme.TitleStyle.Render("> ") + m.inputBuf + theme.DimStyle.Render("█") + "\n")
+		if m.message != "" {
+			b.WriteString("\n  " + theme.ErrorStyle.Render(m.message) + "\n")
+		}
+		b.WriteString("\n" + theme.HelpStyle.Render("  enter confirmar  esc back"))
+
 	case stepConfirm:
 		b.WriteString("  " + theme.TextStyle.Render("Confirmar adição:") + "\n\n")
 		b.WriteString("  " + theme.DimStyle.Render("URL:     ") + theme.TextStyle.Render(m.gitURL) + "\n")
 		b.WriteString("  " + theme.DimStyle.Render("Path:    ") + theme.TextStyle.Render(m.clonePath) + "\n")
 		b.WriteString("  " + theme.DimStyle.Render("Alias:   ") + theme.TextStyle.Render(m.alias) + "\n")
 		b.WriteString("  " + theme.DimStyle.Render("Desc:    ") + theme.TextStyle.Render(m.description) + "\n")
-		b.WriteString("  " + theme.DimStyle.Render("Cat:     ") + theme.TextStyle.Render(m.categoryID) + "\n\n")
+		b.WriteString("  " + theme.DimStyle.Render("Cat:     ") + theme.TextStyle.Render(m.categoryID) + "\n")
+		if m.group != "" {
+			b.WriteString("  " + theme.DimStyle.Render("Grupo:   ") + theme.TextStyle.Render(m.group) + "\n")
+		}
+		b.WriteString("\n")
 
 		options := []string{"Confirmar", "Cancelar"}
 		for i, opt := range options {
@@ -276,6 +310,10 @@ func (m AddProjectModel) handleTextInput(msg tea.KeyMsg) (AddProjectModel, tea.C
 		} else if m.step == stepCustomCatSub {
 			m.step = stepCustomCatName
 			m.inputBuf = m.newCatName
+			m.message = ""
+		} else if m.step == stepCustomGroup {
+			m.buildGroupOptions()
+			m.step = stepGroup
 			m.message = ""
 		} else {
 			m.step--
@@ -373,6 +411,19 @@ func (m AddProjectModel) submitTextInput() (AddProjectModel, tea.Cmd) {
 		m.newCatSub = sub
 		m.inputBuf = ""
 		m.message = ""
+		m.buildGroupOptions()
+		m.step = stepGroup
+		return m, nil
+
+	case stepCustomGroup:
+		g := strings.TrimSpace(m.inputBuf)
+		if g == "" {
+			m.message = "Nome do grupo não pode ser vazio"
+			return m, nil
+		}
+		m.group = g
+		m.inputBuf = ""
+		m.message = ""
 		m.cursor = 0
 		m.step = stepConfirm
 		return m, nil
@@ -441,12 +492,74 @@ func (m AddProjectModel) handleCategorySelect(msg tea.KeyMsg) (AddProjectModel, 
 	case "enter":
 		if m.cursor < len(m.cfg.Categories) {
 			m.categoryID = m.cfg.Categories[m.cursor].ID
-			m.cursor = 0
-			m.step = stepConfirm
+			m.buildGroupOptions()
+			m.step = stepGroup
 		} else {
 			m.inputBuf = ""
 			m.message = ""
 			m.step = stepCustomCatName
+		}
+	}
+	return m, nil
+}
+
+func (m *AddProjectModel) buildGroupOptions() {
+	// Collect existing groups for the selected category
+	seen := make(map[string]bool)
+	var existing []string
+	for _, cat := range m.cfg.Categories {
+		if cat.ID == m.categoryID {
+			for _, p := range cat.Projects {
+				if p.Group != "" && !seen[p.Group] {
+					seen[p.Group] = true
+					existing = append(existing, p.Group)
+				}
+			}
+			break
+		}
+	}
+	m.options = nil
+	m.options = append(m.options, "Sem grupo")
+	m.options = append(m.options, existing...)
+	m.options = append(m.options, "+ Novo grupo")
+	m.cursor = 0
+}
+
+func (m AddProjectModel) handleGroupSelect(msg tea.KeyMsg) (AddProjectModel, tea.Cmd) {
+	switch msg.String() {
+	case "up", "k":
+		if m.cursor > 0 {
+			m.cursor--
+		}
+	case "down", "j":
+		if m.cursor < len(m.options)-1 {
+			m.cursor++
+		}
+	case "esc":
+		// Go back to category
+		m.options = nil
+		for _, cat := range m.cfg.Categories {
+			m.options = append(m.options, cat.Name+" ("+cat.ID+")")
+		}
+		m.options = append(m.options, "+ Nova categoria")
+		m.cursor = 0
+		m.step = stepCategory
+	case "enter":
+		if m.cursor == 0 {
+			// Sem grupo
+			m.group = ""
+			m.cursor = 0
+			m.step = stepConfirm
+		} else if m.cursor == len(m.options)-1 {
+			// Novo grupo - use text input
+			m.inputBuf = ""
+			m.message = ""
+			m.step = stepCustomGroup
+		} else {
+			// Grupo existente
+			m.group = m.options[m.cursor]
+			m.cursor = 0
+			m.step = stepConfirm
 		}
 	}
 	return m, nil
@@ -463,8 +576,8 @@ func (m AddProjectModel) handleConfirm(msg tea.KeyMsg) (AddProjectModel, tea.Cmd
 			m.cursor++
 		}
 	case "esc":
-		m.cursor = 0
-		m.step = stepCategory
+		m.buildGroupOptions()
+		m.step = stepGroup
 	case "enter":
 		if m.cursor == 0 {
 			if err := m.saveProject(); err != nil {
@@ -513,6 +626,7 @@ func (m *AddProjectModel) saveProject() error {
 		Alias: m.alias,
 		Desc:  m.description,
 		Path:  relPath,
+		Group: m.group,
 	}
 
 	found := false

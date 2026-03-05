@@ -15,6 +15,7 @@ type GridItemType int
 const (
 	GridItemCategory GridItemType = iota
 	GridItemDocker
+	GridItemGitLab
 	GridItemAdd
 	GridItemSettings
 )
@@ -24,19 +25,23 @@ const (
 	borderOverhead = 2  // left + right borders
 )
 
-const (
-	vikingShipSail = "" +
-		"            │▸\n" +
-		"       ╔════╤════╗\n" +
-		"       ║░▒▓▓│▓▓▒░║\n" +
-		"       ║░▒▓▓│▓▓▒░║\n" +
-		"       ║░▒▓▓│▓▓▒░║\n" +
-		"       ╚════╧════╝"
+// njordTitle is rendered at runtime with styles, not as const art
 
-	vikingShipHull = "" +
-		" ▄▟▀▀▀▀▀▀▀▀▀│▀▀▀▀▀▀▀▀▀▜▄\n" +
-		"   ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀"
-)
+// RecentPushAlias holds alias + time + approval info for display
+type RecentPushAlias struct {
+	Alias    string
+	Ago      string
+	Approval string // "✓", "⏳ 0/1 Rule", or ""
+}
+
+// PendingMRAlias holds info for a pending MR in the header box
+type PendingMRAlias struct {
+	Alias    string // project alias or path
+	IID      int64  // MR IID (!123)
+	Title    string // MR title (truncated)
+	Ago      string // "Xm atrás"
+	Approval string // "✓", "⏳ 0/1", ""
+}
 
 type GridItem struct {
 	Type  GridItemType
@@ -52,14 +57,16 @@ type GridSelection struct {
 }
 
 type GridModel struct {
-	items     []GridItem
-	cursor    int
-	cols      int
-	cardWidth int
-	width     int
-	height    int
-	selected  *GridSelection
-	offset    int // scroll offset in rows
+	items        []GridItem
+	cursor       int
+	cols         int
+	cardWidth    int
+	width        int
+	height       int
+	selected     *GridSelection
+	offset       int // scroll offset in rows
+	recentPushes []RecentPushAlias
+	pendingMRs   []PendingMRAlias
 }
 
 func NewGridModel(cfg *config.Config) GridModel {
@@ -93,6 +100,14 @@ func NewGridModel(cfg *config.Config) GridModel {
 		Count: len(cfg.DockerStacks),
 	})
 
+	// GitLab card
+	items = append(items, GridItem{
+		Type:  GridItemGitLab,
+		Name:  "GitLab",
+		Sub:   "MRs, Pipelines, Branches",
+		Count: cfg.GitLabProjectCount(),
+	})
+
 	// Add card
 	items = append(items, GridItem{
 		Type: GridItemAdd,
@@ -112,6 +127,14 @@ func NewGridModel(cfg *config.Config) GridModel {
 		cols:      2,
 		cardWidth: 36,
 	}
+}
+
+func (m *GridModel) SetRecentPushes(pushes []RecentPushAlias) {
+	m.recentPushes = pushes
+}
+
+func (m *GridModel) SetPendingMRs(mrs []PendingMRAlias) {
+	m.pendingMRs = mrs
 }
 
 func (m GridModel) Init() tea.Cmd {
@@ -158,20 +181,35 @@ func (m GridModel) Update(msg tea.Msg) (GridModel, tea.Cmd) {
 func (m GridModel) View() string {
 	var b strings.Builder
 
-	// Header with Viking ship pixel art (sail + hull in different colors)
-	sailStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#c0392b"))
-	hullStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#b8860b"))
-	shipArt := lipgloss.JoinVertical(lipgloss.Left,
-		sailStyle.Render(vikingShipSail),
-		hullStyle.Render(vikingShipHull),
-	)
+	// Header: [Aprovações recentes] [MRs pendentes] ᚾ N J O R D
+	runeStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#ff9800"))
+	nameStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#daa520"))
+	title := "  " + runeStyle.Render("ᚾ") + " " + nameStyle.Render("N J O R D")
 
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.Title)
-	runeStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.BorderSel)
-	title := runeStyle.Render("ᚾ") + " " + titleStyle.Render("Njord")
+	hasPushes := len(m.recentPushes) > 0
+	hasPending := len(m.pendingMRs) > 0
 
-	header := lipgloss.JoinHorizontal(lipgloss.Center, "  ", shipArt, "  ", title)
-	b.WriteString(header)
+	if hasPushes || hasPending {
+		var headerParts []string
+		if hasPushes {
+			headerParts = append(headerParts, m.renderPushBox())
+		}
+		if hasPending {
+			headerParts = append(headerParts, m.renderMRBox())
+		}
+		headerParts = append(headerParts, title)
+		// Interleave "  " between parts for spacing
+		var joined []string
+		for i, p := range headerParts {
+			if i > 0 {
+				joined = append(joined, "  ")
+			}
+			joined = append(joined, p)
+		}
+		b.WriteString(lipgloss.JoinHorizontal(lipgloss.Center, joined...))
+	} else {
+		b.WriteString(title)
+	}
 	b.WriteString("\n\n")
 
 	// Render cards in 2-column grid
@@ -208,6 +246,57 @@ func (m GridModel) View() string {
 	}
 
 	return b.String()
+}
+
+func (m GridModel) renderPushBox() string {
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#8b6508")).
+		Padding(0, 1).
+		Width(34)
+
+	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.Title)
+	var lines []string
+	lines = append(lines, titleStyle.Render("Aprovações recentes"))
+
+	for _, p := range m.recentPushes {
+		icon := ""
+		if p.Approval != "" {
+			icon = p.Approval + " "
+		}
+		alias := theme.GitLabTitleStyle.Render(p.Alias)
+		ago := theme.DimStyle.Render(" " + p.Ago)
+		lines = append(lines, icon+alias+ago)
+	}
+
+	content := strings.Join(lines, "\n")
+	return boxStyle.Render(content)
+}
+
+func (m GridModel) renderMRBox() string {
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#8b6508")).
+		Padding(0, 1).
+		Width(34)
+
+	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.Title)
+	var lines []string
+	lines = append(lines, titleStyle.Render("MRs pendentes"))
+
+	for _, mr := range m.pendingMRs {
+		icon := ""
+		if mr.Approval != "" {
+			icon = mr.Approval + " "
+		}
+		alias := theme.GitLabTitleStyle.Render(mr.Alias)
+		iid := theme.DimStyle.Render(fmt.Sprintf(" !%d", mr.IID))
+		ago := theme.DimStyle.Render(" " + mr.Ago)
+		lines = append(lines, icon+alias+iid+ago)
+	}
+
+	content := strings.Join(lines, "\n")
+	return boxStyle.Render(content)
 }
 
 func (m *GridModel) SetSize(w, h int) {
@@ -261,6 +350,18 @@ func (m GridModel) renderCard(item GridItem, selected bool) string {
 		} else {
 			cardStyle = theme.DockerCardStyle
 			titleStyle = theme.DockerTitleStyle
+			subStyle = theme.SubStyle
+			countStyle = theme.CountStyle
+		}
+	case GridItemGitLab:
+		if selected {
+			cardStyle = theme.GitLabCardSelectedStyle
+			titleStyle = theme.GitLabTitleSelectedStyle
+			subStyle = theme.SubSelectedStyle
+			countStyle = theme.CountSelectedStyle
+		} else {
+			cardStyle = theme.GitLabCardStyle
+			titleStyle = theme.GitLabTitleStyle
 			subStyle = theme.SubStyle
 			countStyle = theme.CountStyle
 		}
@@ -318,10 +419,9 @@ func (m GridModel) renderCard(item GridItem, selected bool) string {
 }
 
 func (m GridModel) visibleRows() int {
-	// Each card row is ~5 lines (border + padding + content)
-	// Header (ship art) takes ~10 lines, help takes ~2 lines
+	// Header ~3 lines (title + blank), help ~2 lines
 	cardHeight := 6
-	available := m.height - 12
+	available := m.height - 7
 	if available < cardHeight {
 		return 1
 	}

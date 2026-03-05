@@ -1,12 +1,28 @@
 package ui
 
 import (
+	"fmt"
+	"strings"
+	"time"
+
 	"github.com/DevViking-Persike/njord-cli/internal/config"
 	"github.com/DevViking-Persike/njord-cli/internal/docker"
+	"github.com/DevViking-Persike/njord-cli/internal/gitlab"
 	"github.com/DevViking-Persike/njord-cli/internal/theme"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
+
+// Async message for recent pushes
+type recentPushesMsg struct {
+	pushes []RecentPushAlias
+	client *gitlab.Client
+}
+
+// Async message for pending MRs
+type pendingMRsMsg struct {
+	mrs []PendingMRAlias
+}
 
 type Screen int
 
@@ -18,6 +34,8 @@ const (
 	ScreenAddProject
 	ScreenAddStack
 	ScreenSettings
+	ScreenGitLab
+	ScreenGitLabActions
 )
 
 // Result is the final output from the TUI.
@@ -35,13 +53,18 @@ type AppModel struct {
 	height int
 
 	// Sub-models
-	grid          GridModel
-	projects      ProjectsModel
-	dockerScreen  DockerModel
-	dockerActions DockerActionsModel
-	addProject    AddProjectModel
-	addStack      AddStackModel
-	settings      SettingsModel
+	grid           GridModel
+	projects       ProjectsModel
+	dockerScreen   DockerModel
+	dockerActions  DockerActionsModel
+	addProject     AddProjectModel
+	addStack       AddStackModel
+	settings       SettingsModel
+	gitlabScreen   GitLabModel
+	gitlabActions  GitLabActionsModel
+
+	// GitLab client (lazy init)
+	gitlabClient *gitlab.Client
 
 	// Context for transitions
 	selectedCatID string
@@ -62,7 +85,12 @@ func NewApp(cfg *config.Config, dockerClient *docker.Client, configPath string) 
 }
 
 func (m AppModel) Init() tea.Cmd {
-	return m.grid.Init()
+	cmds := []tea.Cmd{m.grid.Init()}
+	if m.config.GitLab.Token != "" {
+		cmds = append(cmds, m.fetchRecentPushes())
+		cmds = append(cmds, m.fetchPendingMRs())
+	}
+	return tea.Batch(cmds...)
 }
 
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -77,6 +105,19 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.addProject.SetSize(msg.Width, msg.Height)
 		m.addStack.SetSize(msg.Width, msg.Height)
 		m.settings.SetSize(msg.Width, msg.Height)
+		m.gitlabScreen.SetSize(msg.Width, msg.Height)
+		m.gitlabActions.SetSize(msg.Width, msg.Height)
+		return m, nil
+
+	case recentPushesMsg:
+		m.grid.SetRecentPushes(msg.pushes)
+		if msg.client != nil {
+			m.gitlabClient = msg.client
+		}
+		return m, nil
+
+	case pendingMRsMsg:
+		m.grid.SetPendingMRs(msg.mrs)
 		return m, nil
 
 	case tea.KeyMsg:
@@ -101,6 +142,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateAddStack(msg)
 	case ScreenSettings:
 		return m.updateSettings(msg)
+	case ScreenGitLab:
+		return m.updateGitLab(msg)
+	case ScreenGitLabActions:
+		return m.updateGitLabActions(msg)
 	}
 
 	return m, nil
@@ -127,6 +172,10 @@ func (m AppModel) View() string {
 		content = m.addStack.View()
 	case ScreenSettings:
 		content = m.settings.View()
+	case ScreenGitLab:
+		content = m.gitlabScreen.View()
+	case ScreenGitLabActions:
+		content = m.gitlabActions.View()
 	}
 
 	help := theme.HelpStyle.Render("  ↑↓←→ navigate  enter select  esc back  q quit")
@@ -172,6 +221,27 @@ func (m AppModel) updateGrid(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.dockerScreen.SetSize(m.width, m.height)
 			m.screen = ScreenDocker
 			return m, m.dockerScreen.Init()
+
+		case GridItemGitLab:
+			// Check if token is configured
+			if m.config.GitLab.Token == "" {
+				// Redirect to settings to configure token
+				m.settings = NewSettingsModel(m.config, m.configPath)
+				m.settings.SetSize(m.width, m.height)
+				m.screen = ScreenSettings
+				return m, m.settings.Init()
+			}
+			// Lazy init gitlab client
+			if m.gitlabClient == nil {
+				client, err := gitlab.NewClient(m.config.GitLab.Token, m.config.GitLab.GitLabURL())
+				if err == nil {
+					m.gitlabClient = client
+				}
+			}
+			m.gitlabScreen = NewGitLabModel(m.config, m.configPath, m.gitlabClient)
+			m.gitlabScreen.SetSize(m.width, m.height)
+			m.screen = ScreenGitLab
+			return m, m.gitlabScreen.Init()
 
 		case GridItemAdd:
 			m.addProject = NewAddProjectModel(m.config, m.configPath)
@@ -310,6 +380,199 @@ func (m AppModel) updateSettings(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, cmd
+}
+
+func (m AppModel) updateGitLab(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.gitlabScreen, cmd = m.gitlabScreen.Update(msg)
+
+	if m.gitlabScreen.GoBack() {
+		// Reload config in case gitlab_path was modified
+		if updated, err := config.Load(m.configPath); err == nil {
+			m.config = updated
+			m.grid = NewGridModel(m.config)
+			m.grid.SetSize(m.width, m.height)
+		}
+		m.screen = ScreenGrid
+		return m, nil
+	}
+
+	if sel := m.gitlabScreen.Selected(); sel != nil {
+		m.gitlabScreen.ClearSelection()
+		if m.gitlabClient != nil {
+			m.gitlabActions = NewGitLabActionsModel(m.gitlabClient, sel.project.GitLabPath, sel.project.Alias, m.config.GitLab.GitLabURL())
+			m.gitlabActions.SetSize(m.width, m.height)
+			m.screen = ScreenGitLabActions
+			return m, m.gitlabActions.Init()
+		}
+	}
+
+	return m, cmd
+}
+
+func (m AppModel) updateGitLabActions(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.gitlabActions, cmd = m.gitlabActions.Update(msg)
+
+	if m.gitlabActions.GoBack() {
+		m.gitlabScreen = NewGitLabModel(m.config, m.configPath, m.gitlabClient)
+		m.gitlabScreen.SetSize(m.width, m.height)
+		m.screen = ScreenGitLab
+		return m, m.gitlabScreen.Init()
+	}
+
+	return m, cmd
+}
+
+func (m AppModel) fetchRecentPushes() tea.Cmd {
+	token := m.config.GitLab.Token
+	url := m.config.GitLab.GitLabURL()
+	cfg := m.config
+
+	return func() tea.Msg {
+		client, err := gitlab.NewClient(token, url)
+		if err != nil {
+			return recentPushesMsg{}
+		}
+
+		pushes, err := client.ListRecentPushes(3)
+		if err != nil {
+			return recentPushesMsg{client: client}
+		}
+
+		// Build gitlab_path -> alias map
+		pathToAlias := make(map[string]string)
+		for _, cat := range cfg.Categories {
+			for _, p := range cat.Projects {
+				if p.GitLabPath != "" {
+					pathToAlias[p.GitLabPath] = p.Alias
+				}
+			}
+		}
+
+		// Filter to last 6 hours only
+		sixHoursAgo := time.Now().Add(-6 * time.Hour)
+
+		var result []RecentPushAlias
+		for _, push := range pushes {
+			if push.CreatedAt.Before(sixHoursAgo) {
+				continue
+			}
+
+			projectPath, err := client.ResolveProjectPath(push.ProjectID)
+			if err != nil {
+				continue
+			}
+			alias := projectPath
+			if a, ok := pathToAlias[projectPath]; ok {
+				alias = a
+			}
+
+			// Fetch approval status for this project
+			approvalIcon := ""
+			approval, _ := client.GetProjectLatestMRApproval(projectPath)
+			if approval != nil {
+				if approval.Approved {
+					approvalIcon = "✓"
+				} else {
+					approvalIcon = fmt.Sprintf("⏳ %d/%d", approval.ApprovalsGiven, approval.ApprovalsRequired)
+					if approval.RuleName != "" {
+						approvalIcon += " " + approval.RuleName
+					}
+				}
+			}
+
+			result = append(result, RecentPushAlias{
+				Alias:    alias,
+				Ago:      timeAgo(push.CreatedAt),
+				Approval: approvalIcon,
+			})
+		}
+
+		if len(result) > 6 {
+			result = result[:6]
+		}
+
+		return recentPushesMsg{pushes: result, client: client}
+	}
+}
+
+func (m AppModel) fetchPendingMRs() tea.Cmd {
+	token := m.config.GitLab.Token
+	url := m.config.GitLab.GitLabURL()
+	cfg := m.config
+
+	return func() tea.Msg {
+		client, err := gitlab.NewClient(token, url)
+		if err != nil {
+			return pendingMRsMsg{}
+		}
+
+		mrs, err := client.ListMyOpenMRs()
+		if err != nil {
+			return pendingMRsMsg{}
+		}
+
+		// Build gitlab_path -> alias map
+		pathToAlias := make(map[string]string)
+		for _, cat := range cfg.Categories {
+			for _, p := range cat.Projects {
+				if p.GitLabPath != "" {
+					pathToAlias[p.GitLabPath] = p.Alias
+				}
+			}
+		}
+
+		// Build projectID -> path cache
+		projectPaths := make(map[int64]string)
+
+		var result []PendingMRAlias
+		for _, mr := range mrs {
+			// Resolve project path from ID
+			projectPath, ok := projectPaths[mr.ProjectID]
+			if !ok {
+				resolved, err := client.ResolveProjectPath(mr.ProjectID)
+				if err != nil {
+					// Use project ID as fallback
+					resolved = fmt.Sprintf("project/%d", mr.ProjectID)
+				}
+				projectPaths[mr.ProjectID] = resolved
+				projectPath = resolved
+			}
+
+			alias := projectPath
+			if a, found := pathToAlias[projectPath]; found {
+				alias = a
+			}
+
+			// Fetch approval info (best-effort, skip fallback paths)
+			approvalIcon := ""
+			if !strings.HasPrefix(projectPath, "project/") {
+				approval := client.GetMRApproval(projectPath, mr.IID, mr.Title)
+				if approval != nil {
+					if approval.Approved {
+						approvalIcon = "✓"
+					} else if approval.ApprovalsRequired > 0 {
+						approvalIcon = fmt.Sprintf("⏳ %d/%d", approval.ApprovalsGiven, approval.ApprovalsRequired)
+					}
+				}
+			}
+
+			result = append(result, PendingMRAlias{
+				Alias:    alias,
+				IID:      mr.IID,
+				Title:    mr.Title,
+				Ago:      timeAgo(mr.CreatedAt),
+				Approval: approvalIcon,
+			})
+		}
+
+		if len(result) > 5 {
+			result = result[:5]
+		}
+
+		return pendingMRsMsg{mrs: result}
+	}
 }
 
 func shellQuote(s string) string {

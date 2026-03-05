@@ -6,6 +6,7 @@ import (
 
 	"github.com/DevViking-Persike/njord-cli/internal/config"
 	"github.com/DevViking-Persike/njord-cli/internal/theme"
+	"github.com/DevViking-Persike/njord-cli/internal/ui/components"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -20,8 +21,17 @@ const (
 	settingsEditPathInput
 	settingsDeleteProject
 	settingsDeleteConfirm
+	settingsEditGroupProject
+	settingsEditGroupSelect
+	settingsEditGroupCustom
+	settingsEditGitLabToken
 	settingsDone
 )
+
+// Chrome lines used for scroll calculations in settings.
+const settingsChromeLines = 9
+
+var mainMenuOptions = []string{"Editar Categorias", "Editar Locais (paths)", "Editar Grupos", "Deletar Projeto", "GitLab Token"}
 
 type settingsProjectRef struct {
 	catIdx  int
@@ -47,8 +57,8 @@ type SettingsModel struct {
 	editingField    string
 	allProjects     []settingsProjectRef
 
-	offset        int // scroll offset for long lists
-	width, height int
+	scroll components.ScrollState
+	width  int
 }
 
 func NewSettingsModel(cfg *config.Config, configPath string) SettingsModel {
@@ -56,7 +66,7 @@ func NewSettingsModel(cfg *config.Config, configPath string) SettingsModel {
 		cfg:        cfg,
 		configPath: configPath,
 		screen:     settingsMenu,
-		options:    []string{"Editar Categorias", "Editar Locais (paths)", "Deletar Projeto"},
+		options:    append([]string{}, mainMenuOptions...),
 	}
 }
 
@@ -72,24 +82,24 @@ func (m SettingsModel) Update(msg tea.Msg) (SettingsModel, tea.Cmd) {
 			return m.handleMenu(msg)
 		case settingsEditCategories:
 			return m.handleEditCategories(msg)
-		case settingsEditCatName:
-			return m.handleTextInput(msg)
-		case settingsEditCatSub:
+		case settingsEditCatName, settingsEditCatSub, settingsEditPathInput, settingsEditGroupCustom, settingsEditGitLabToken:
 			return m.handleTextInput(msg)
 		case settingsEditPaths:
 			return m.handleEditPaths(msg)
-		case settingsEditPathInput:
-			return m.handleTextInput(msg)
 		case settingsDeleteProject:
 			return m.handleDeleteProject(msg)
 		case settingsDeleteConfirm:
 			return m.handleDeleteConfirm(msg)
+		case settingsEditGroupProject:
+			return m.handleEditGroupProject(msg)
+		case settingsEditGroupSelect:
+			return m.handleEditGroupSelect(msg)
 		case settingsDone:
 			if msg.String() == "enter" || msg.String() == "esc" {
 				m.screen = settingsMenu
 				m.cursor = 0
 				m.message = ""
-				m.options = []string{"Editar Categorias", "Editar Locais (paths)", "Deletar Projeto"}
+				m.options = []string{"Editar Categorias", "Editar Locais (paths)", "Editar Grupos", "Deletar Projeto"}
 			}
 			return m, nil
 		}
@@ -104,58 +114,39 @@ func (m SettingsModel) View() string {
 	divider := theme.DimStyle.Render("  " + strings.Repeat("─", 50))
 	b.WriteString("\n" + header + "\n" + divider + "\n\n")
 
+	selectedFn := func(s string) string { return theme.TitleSelectedStyle.Render(s) }
+	normalFn := func(s string) string { return theme.TextStyle.Render(s) }
+
 	switch m.screen {
 	case settingsMenu:
 		b.WriteString("  " + theme.TextStyle.Render("O que deseja configurar?") + "\n\n")
-		for i, opt := range m.options {
-			if i == m.cursor {
-				b.WriteString("  " + theme.TitleSelectedStyle.Render("▶ "+opt) + "\n")
-			} else {
-				b.WriteString("  " + theme.TextStyle.Render("  "+opt) + "\n")
-			}
-		}
+		b.WriteString(components.RenderMenuOptions(m.options, m.cursor, selectedFn, normalFn))
 		b.WriteString("\n" + theme.HelpStyle.Render("  ↑↓ navigate  enter select  esc voltar"))
 
 	case settingsEditCategories:
 		b.WriteString("  " + theme.TextStyle.Render("Selecione a categoria para editar:") + "\n\n")
-		for i, opt := range m.options {
-			if i == m.cursor {
-				b.WriteString("  " + theme.TitleSelectedStyle.Render("▶ "+opt) + "\n")
-			} else {
-				b.WriteString("  " + theme.TextStyle.Render("  "+opt) + "\n")
-			}
-		}
+		b.WriteString(components.RenderMenuOptions(m.options, m.cursor, selectedFn, normalFn))
 		b.WriteString("\n" + theme.HelpStyle.Render("  ↑↓ navigate  enter editar  esc voltar"))
 
 	case settingsEditCatName:
 		cat := m.cfg.Categories[m.selectedCatIdx]
 		b.WriteString("  " + theme.DimStyle.Render("Editando: "+cat.Name) + "\n\n")
 		b.WriteString("  " + theme.TextStyle.Render("Novo nome da categoria:") + "\n\n")
-		b.WriteString("  " + theme.TitleStyle.Render("> ") + m.inputBuf + theme.DimStyle.Render("█") + "\n")
-		if m.message != "" {
-			b.WriteString("\n  " + theme.ErrorStyle.Render(m.message) + "\n")
-		}
+		b.WriteString(components.RenderTextInput(m.inputBuf, ""))
+		b.WriteString(components.RenderError(m.message))
 		b.WriteString("\n" + theme.HelpStyle.Render("  enter confirmar  esc cancelar"))
 
 	case settingsEditCatSub:
 		cat := m.cfg.Categories[m.selectedCatIdx]
 		b.WriteString("  " + theme.DimStyle.Render("Editando: "+cat.Name) + "\n\n")
 		b.WriteString("  " + theme.TextStyle.Render("Nova descrição da categoria:") + "\n\n")
-		b.WriteString("  " + theme.TitleStyle.Render("> ") + m.inputBuf + theme.DimStyle.Render("█") + "\n")
-		if m.message != "" {
-			b.WriteString("\n  " + theme.ErrorStyle.Render(m.message) + "\n")
-		}
+		b.WriteString(components.RenderTextInput(m.inputBuf, ""))
+		b.WriteString(components.RenderError(m.message))
 		b.WriteString("\n" + theme.HelpStyle.Render("  enter confirmar  esc cancelar"))
 
 	case settingsEditPaths:
 		b.WriteString("  " + theme.TextStyle.Render("Selecione o path para editar:") + "\n\n")
-		for i, opt := range m.options {
-			if i == m.cursor {
-				b.WriteString("  " + theme.TitleSelectedStyle.Render("▶ "+opt) + "\n")
-			} else {
-				b.WriteString("  " + theme.TextStyle.Render("  "+opt) + "\n")
-			}
-		}
+		b.WriteString(components.RenderMenuOptions(m.options, m.cursor, selectedFn, normalFn))
 		b.WriteString("\n" + theme.HelpStyle.Render("  ↑↓ navigate  enter editar  esc voltar"))
 
 	case settingsEditPathInput:
@@ -165,10 +156,8 @@ func (m SettingsModel) View() string {
 		}
 		b.WriteString("  " + theme.DimStyle.Render("Editando: "+label) + "\n\n")
 		b.WriteString("  " + theme.TextStyle.Render("Novo path:") + "\n\n")
-		b.WriteString("  " + theme.TitleStyle.Render("> ") + m.inputBuf + theme.DimStyle.Render("█") + "\n")
-		if m.message != "" {
-			b.WriteString("\n  " + theme.ErrorStyle.Render(m.message) + "\n")
-		}
+		b.WriteString(components.RenderTextInput(m.inputBuf, ""))
+		b.WriteString(components.RenderError(m.message))
 		b.WriteString("\n" + theme.HelpStyle.Render("  enter confirmar  esc cancelar"))
 
 	case settingsDeleteProject:
@@ -176,15 +165,8 @@ func (m SettingsModel) View() string {
 		if len(m.options) == 0 {
 			b.WriteString("  " + theme.DimStyle.Render("Nenhum projeto cadastrado") + "\n")
 		} else {
-			visible := m.visibleListRows()
-			start := m.offset
-			end := start + visible
-			if end > len(m.options) {
-				end = len(m.options)
-			}
-			if start > 0 {
-				b.WriteString("  " + theme.DimStyle.Render("  ↑ mais projetos...") + "\n")
-			}
+			start, end := m.scroll.Bounds(len(m.options), settingsChromeLines)
+			components.RenderScrollUp(&b, start)
 			for i := start; i < end; i++ {
 				opt := m.options[i]
 				if i == m.cursor {
@@ -193,9 +175,7 @@ func (m SettingsModel) View() string {
 					b.WriteString("  " + theme.TextStyle.Render("  "+opt) + "\n")
 				}
 			}
-			if end < len(m.options) {
-				b.WriteString("  " + theme.DimStyle.Render("  ↓ mais projetos...") + "\n")
-			}
+			components.RenderScrollDown(&b, end, len(m.options))
 		}
 		b.WriteString("\n" + theme.HelpStyle.Render("  ↑↓ navigate  enter selecionar  esc voltar"))
 
@@ -204,21 +184,55 @@ func (m SettingsModel) View() string {
 		b.WriteString("  " + theme.WarningStyle.Render("Tem certeza que deseja deletar?") + "\n\n")
 		b.WriteString("  " + theme.TextStyle.Render(ref.display) + "\n\n")
 		confirmOpts := []string{"Sim, deletar", "Não, cancelar"}
-		for i, opt := range confirmOpts {
-			if i == m.cursor {
-				b.WriteString("  " + theme.TitleSelectedStyle.Render("▶ "+opt) + "\n")
-			} else {
-				b.WriteString("  " + theme.TextStyle.Render("  "+opt) + "\n")
-			}
-		}
+		b.WriteString(components.RenderMenuOptions(confirmOpts, m.cursor, selectedFn, normalFn))
 		b.WriteString("\n" + theme.HelpStyle.Render("  ↑↓ navigate  enter confirmar  esc cancelar"))
 
-	case settingsDone:
-		if m.messageType == "ok" {
-			b.WriteString("  " + theme.SuccessStyle.Render("✓ "+m.message) + "\n")
+	case settingsEditGroupProject:
+		b.WriteString("  " + theme.TextStyle.Render("Selecione o projeto para editar grupo:") + "\n\n")
+		if len(m.options) == 0 {
+			b.WriteString("  " + theme.DimStyle.Render("Nenhum projeto cadastrado") + "\n")
 		} else {
-			b.WriteString("  " + theme.ErrorStyle.Render("✗ "+m.message) + "\n")
+			start, end := m.scroll.Bounds(len(m.options), settingsChromeLines)
+			components.RenderScrollUp(&b, start)
+			for i := start; i < end; i++ {
+				opt := m.options[i]
+				if i == m.cursor {
+					b.WriteString("  " + theme.TitleSelectedStyle.Render("▶ "+opt) + "\n")
+				} else {
+					b.WriteString("  " + theme.TextStyle.Render("  "+opt) + "\n")
+				}
+			}
+			components.RenderScrollDown(&b, end, len(m.options))
 		}
+		b.WriteString("\n" + theme.HelpStyle.Render("  ↑↓ navigate  enter selecionar  esc voltar"))
+
+	case settingsEditGroupSelect:
+		ref := m.allProjects[m.selectedProjIdx]
+		b.WriteString("  " + theme.DimStyle.Render("Projeto: "+ref.display) + "\n\n")
+		b.WriteString("  " + theme.TextStyle.Render("Selecione o grupo:") + "\n\n")
+		b.WriteString(components.RenderMenuOptions(m.options, m.cursor, selectedFn, normalFn))
+		b.WriteString("\n" + theme.HelpStyle.Render("  ↑↓ navigate  enter select  esc voltar"))
+
+	case settingsEditGroupCustom:
+		b.WriteString("  " + theme.TextStyle.Render("Nome do novo grupo:") + "\n\n")
+		b.WriteString(components.RenderTextInput(m.inputBuf, ""))
+		b.WriteString(components.RenderError(m.message))
+		b.WriteString("\n" + theme.HelpStyle.Render("  enter confirmar  esc cancelar"))
+
+	case settingsEditGitLabToken:
+		b.WriteString("  " + theme.TextStyle.Render("GitLab Personal Access Token:") + "\n\n")
+		masked := m.inputBuf
+		if len(masked) > 8 {
+			masked = masked[:4] + strings.Repeat("*", len(masked)-8) + masked[len(masked)-4:]
+		}
+		b.WriteString(components.RenderTextInput(masked, ""))
+		b.WriteString(components.RenderError(m.message))
+		b.WriteString("\n  " + theme.DimStyle.Render("Scope necessário: api") + "\n")
+		b.WriteString("  " + theme.DimStyle.Render("Crie em: gitlab.com → Settings → Access Tokens") + "\n")
+		b.WriteString("\n" + theme.HelpStyle.Render("  enter confirmar  esc cancelar"))
+
+	case settingsDone:
+		b.WriteString(components.RenderMessage(m.message, m.messageType))
 		b.WriteString("\n" + theme.HelpStyle.Render("  enter voltar"))
 	}
 
@@ -227,41 +241,18 @@ func (m SettingsModel) View() string {
 
 func (m *SettingsModel) SetSize(w, h int) {
 	m.width = w
-	m.height = h
+	m.scroll.Height = h
 }
 
 func (m *SettingsModel) GoBack() bool { return m.goBack }
-
-func (m SettingsModel) visibleListRows() int {
-	// header(3) + title+blank(2) + help(2) + app help(2) = ~9 lines of chrome
-	available := m.height - 9
-	if available < 3 {
-		return 3
-	}
-	return available
-}
-
-func (m *SettingsModel) ensureVisible() {
-	visible := m.visibleListRows()
-	if m.cursor < m.offset {
-		m.offset = m.cursor
-	}
-	if m.cursor >= m.offset+visible {
-		m.offset = m.cursor - visible + 1
-	}
-}
 
 // --- Menu handler ---
 
 func (m SettingsModel) handleMenu(msg tea.KeyMsg) (SettingsModel, tea.Cmd) {
 	switch msg.String() {
-	case "up", "k":
-		if m.cursor > 0 {
-			m.cursor--
-		}
-	case "down", "j":
-		if m.cursor < len(m.options)-1 {
-			m.cursor++
+	case "up", "k", "down", "j":
+		if newCursor, moved := components.ListNav(msg, m.cursor, len(m.options)); moved {
+			m.cursor = newCursor
 		}
 	case "esc":
 		m.goBack = true
@@ -281,12 +272,16 @@ func (m SettingsModel) handleMenu(msg tea.KeyMsg) (SettingsModel, tea.Cmd) {
 			}
 			m.cursor = 0
 			m.screen = settingsEditPaths
-		case 2: // Deletar Projeto
+		case 2: // Editar Grupos
 			m.allProjects = nil
 			m.options = nil
 			for ci, cat := range m.cfg.Categories {
 				for pi, proj := range cat.Projects {
-					display := proj.Alias + " — " + proj.Desc + " (" + cat.Name + ")"
+					groupTag := ""
+					if proj.Group != "" {
+						groupTag = " [" + proj.Group + "]"
+					}
+					display := proj.Alias + groupTag + " — " + proj.Desc + " (" + cat.Name + ")"
 					m.allProjects = append(m.allProjects, settingsProjectRef{
 						catIdx:  ci,
 						projIdx: pi,
@@ -296,8 +291,32 @@ func (m SettingsModel) handleMenu(msg tea.KeyMsg) (SettingsModel, tea.Cmd) {
 				}
 			}
 			m.cursor = 0
-			m.offset = 0
+			m.scroll.Offset = 0
+			m.screen = settingsEditGroupProject
+		case 3: // Deletar Projeto
+			m.allProjects = nil
+			m.options = nil
+			for ci, cat := range m.cfg.Categories {
+				for pi, proj := range cat.Projects {
+					display := proj.Alias + " — " + proj.Desc + " (" + cat.Name + ")"
+					if proj.Group != "" {
+						display = proj.Alias + " [" + proj.Group + "] — " + proj.Desc + " (" + cat.Name + ")"
+					}
+					m.allProjects = append(m.allProjects, settingsProjectRef{
+						catIdx:  ci,
+						projIdx: pi,
+						display: display,
+					})
+					m.options = append(m.options, display)
+				}
+			}
+			m.cursor = 0
+			m.scroll.Offset = 0
 			m.screen = settingsDeleteProject
+		case 4: // GitLab Token
+			m.inputBuf = m.cfg.GitLab.Token
+			m.message = ""
+			m.screen = settingsEditGitLabToken
 		}
 	}
 	return m, nil
@@ -307,18 +326,14 @@ func (m SettingsModel) handleMenu(msg tea.KeyMsg) (SettingsModel, tea.Cmd) {
 
 func (m SettingsModel) handleEditCategories(msg tea.KeyMsg) (SettingsModel, tea.Cmd) {
 	switch msg.String() {
-	case "up", "k":
-		if m.cursor > 0 {
-			m.cursor--
-		}
-	case "down", "j":
-		if m.cursor < len(m.options)-1 {
-			m.cursor++
+	case "up", "k", "down", "j":
+		if newCursor, moved := components.ListNav(msg, m.cursor, len(m.options)); moved {
+			m.cursor = newCursor
 		}
 	case "esc":
 		m.screen = settingsMenu
 		m.cursor = 0
-		m.options = []string{"Editar Categorias", "Editar Locais (paths)", "Deletar Projeto"}
+		m.options = append([]string{}, mainMenuOptions...)
 	case "enter":
 		if m.cursor < len(m.cfg.Categories) {
 			m.selectedCatIdx = m.cursor
@@ -334,18 +349,14 @@ func (m SettingsModel) handleEditCategories(msg tea.KeyMsg) (SettingsModel, tea.
 
 func (m SettingsModel) handleEditPaths(msg tea.KeyMsg) (SettingsModel, tea.Cmd) {
 	switch msg.String() {
-	case "up", "k":
-		if m.cursor > 0 {
-			m.cursor--
-		}
-	case "down", "j":
-		if m.cursor < len(m.options)-1 {
-			m.cursor++
+	case "up", "k", "down", "j":
+		if newCursor, moved := components.ListNav(msg, m.cursor, len(m.options)); moved {
+			m.cursor = newCursor
 		}
 	case "esc":
 		m.screen = settingsMenu
 		m.cursor = 0
-		m.options = []string{"Editar Categorias", "Editar Locais (paths)", "Deletar Projeto"}
+		m.options = append([]string{}, mainMenuOptions...)
 	case "enter":
 		switch m.cursor {
 		case 0:
@@ -365,20 +376,15 @@ func (m SettingsModel) handleEditPaths(msg tea.KeyMsg) (SettingsModel, tea.Cmd) 
 
 func (m SettingsModel) handleDeleteProject(msg tea.KeyMsg) (SettingsModel, tea.Cmd) {
 	switch msg.String() {
-	case "up", "k":
-		if m.cursor > 0 {
-			m.cursor--
-			m.ensureVisible()
-		}
-	case "down", "j":
-		if m.cursor < len(m.options)-1 {
-			m.cursor++
-			m.ensureVisible()
+	case "up", "k", "down", "j":
+		if newCursor, moved := components.ListNav(msg, m.cursor, len(m.options)); moved {
+			m.cursor = newCursor
+			m.scroll.EnsureVisible(m.cursor, settingsChromeLines)
 		}
 	case "esc":
 		m.screen = settingsMenu
 		m.cursor = 0
-		m.options = []string{"Editar Categorias", "Editar Locais (paths)", "Deletar Projeto"}
+		m.options = append([]string{}, mainMenuOptions...)
 	case "enter":
 		if len(m.allProjects) > 0 && m.cursor < len(m.allProjects) {
 			m.selectedProjIdx = m.cursor
@@ -391,36 +397,104 @@ func (m SettingsModel) handleDeleteProject(msg tea.KeyMsg) (SettingsModel, tea.C
 
 func (m SettingsModel) handleDeleteConfirm(msg tea.KeyMsg) (SettingsModel, tea.Cmd) {
 	switch msg.String() {
-	case "up", "k":
-		if m.cursor > 0 {
-			m.cursor--
-		}
-	case "down", "j":
-		if m.cursor < 1 {
-			m.cursor++
+	case "up", "k", "down", "j":
+		if newCursor, moved := components.ListNav(msg, m.cursor, 2); moved {
+			m.cursor = newCursor
 		}
 	case "esc":
 		m.cursor = m.selectedProjIdx
 		m.screen = settingsDeleteProject
 	case "enter":
 		if m.cursor == 0 {
-			// Confirm delete
 			ref := m.allProjects[m.selectedProjIdx]
 			cat := &m.cfg.Categories[ref.catIdx]
 			cat.Projects = append(cat.Projects[:ref.projIdx], cat.Projects[ref.projIdx+1:]...)
-
-			if err := config.Save(m.cfg, m.configPath); err != nil {
-				m.message = fmt.Sprintf("Erro ao salvar: %s", err)
-				m.messageType = "error"
-			} else {
-				m.message = "Projeto removido com sucesso!"
-				m.messageType = "ok"
-			}
+			m.message, m.messageType = components.SaveConfig(m.cfg, m.configPath, "Projeto removido com sucesso!")
 			m.screen = settingsDone
 		} else {
-			// Cancel
 			m.cursor = m.selectedProjIdx
 			m.screen = settingsDeleteProject
+		}
+	}
+	return m, nil
+}
+
+// --- Edit Group handlers ---
+
+func (m SettingsModel) handleEditGroupProject(msg tea.KeyMsg) (SettingsModel, tea.Cmd) {
+	switch msg.String() {
+	case "up", "k", "down", "j":
+		if newCursor, moved := components.ListNav(msg, m.cursor, len(m.options)); moved {
+			m.cursor = newCursor
+			m.scroll.EnsureVisible(m.cursor, settingsChromeLines)
+		}
+	case "esc":
+		m.screen = settingsMenu
+		m.cursor = 0
+		m.options = append([]string{}, mainMenuOptions...)
+	case "enter":
+		if len(m.allProjects) > 0 && m.cursor < len(m.allProjects) {
+			m.selectedProjIdx = m.cursor
+			m.buildGroupSelectOptions()
+			m.screen = settingsEditGroupSelect
+		}
+	}
+	return m, nil
+}
+
+func (m *SettingsModel) buildGroupSelectOptions() {
+	ref := m.allProjects[m.selectedProjIdx]
+	cat := m.cfg.Categories[ref.catIdx]
+
+	seen := make(map[string]bool)
+	var existing []string
+	for _, p := range cat.Projects {
+		if p.Group != "" && !seen[p.Group] {
+			seen[p.Group] = true
+			existing = append(existing, p.Group)
+		}
+	}
+
+	m.options = nil
+	m.options = append(m.options, "Sem grupo")
+	m.options = append(m.options, existing...)
+	m.options = append(m.options, "+ Novo grupo")
+	m.cursor = 0
+}
+
+func (m SettingsModel) handleEditGroupSelect(msg tea.KeyMsg) (SettingsModel, tea.Cmd) {
+	switch msg.String() {
+	case "up", "k", "down", "j":
+		if newCursor, moved := components.ListNav(msg, m.cursor, len(m.options)); moved {
+			m.cursor = newCursor
+		}
+	case "esc":
+		m.options = nil
+		for _, ref := range m.allProjects {
+			m.options = append(m.options, ref.display)
+		}
+		m.cursor = m.selectedProjIdx
+		m.scroll.Offset = 0
+		m.scroll.EnsureVisible(m.cursor, settingsChromeLines)
+		m.screen = settingsEditGroupProject
+	case "enter":
+		ref := m.allProjects[m.selectedProjIdx]
+		if m.cursor == 0 {
+			// Sem grupo
+			m.cfg.Categories[ref.catIdx].Projects[ref.projIdx].Group = ""
+			m.message, m.messageType = components.SaveConfig(m.cfg, m.configPath, "Grupo removido com sucesso!")
+			m.screen = settingsDone
+		} else if m.cursor == len(m.options)-1 {
+			// Novo grupo
+			m.inputBuf = ""
+			m.message = ""
+			m.screen = settingsEditGroupCustom
+		} else {
+			// Grupo existente
+			group := m.options[m.cursor]
+			m.cfg.Categories[ref.catIdx].Projects[ref.projIdx].Group = group
+			m.message, m.messageType = components.SaveConfig(m.cfg, m.configPath, fmt.Sprintf("Grupo '%s' definido com sucesso!", group))
+			m.screen = settingsDone
 		}
 	}
 	return m, nil
@@ -449,19 +523,20 @@ func (m SettingsModel) handleTextInput(msg tea.KeyMsg) (SettingsModel, tea.Cmd) 
 				"Base projetos: " + m.cfg.Settings.ProjectsBase,
 				"Base pessoal: " + m.cfg.Settings.PersonalBase,
 			}
+		case settingsEditGroupCustom:
+			m.buildGroupSelectOptions()
+			m.screen = settingsEditGroupSelect
+		case settingsEditGitLabToken:
+			m.screen = settingsMenu
+			m.cursor = 0
+			m.options = append([]string{}, mainMenuOptions...)
 		}
 		return m, nil
 	case "enter":
 		return m.submitSettingsInput()
-	case "backspace":
-		if len(m.inputBuf) > 0 {
-			m.inputBuf = m.inputBuf[:len(m.inputBuf)-1]
-		}
-	case "ctrl+u":
-		m.inputBuf = ""
 	default:
-		if msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace {
-			m.inputBuf += string(msg.Runes)
+		if newBuf, handled := components.TextInput(msg, m.inputBuf, nil); handled {
+			m.inputBuf = newBuf
 		}
 	}
 	return m, nil
@@ -488,13 +563,7 @@ func (m SettingsModel) submitSettingsInput() (SettingsModel, tea.Cmd) {
 			return m, nil
 		}
 		m.cfg.Categories[m.selectedCatIdx].Sub = val
-		if err := config.Save(m.cfg, m.configPath); err != nil {
-			m.message = fmt.Sprintf("Erro ao salvar: %s", err)
-			m.messageType = "error"
-		} else {
-			m.message = "Categoria atualizada com sucesso!"
-			m.messageType = "ok"
-		}
+		m.message, m.messageType = components.SaveConfig(m.cfg, m.configPath, "Categoria atualizada com sucesso!")
 		m.screen = settingsDone
 		return m, nil
 
@@ -509,13 +578,28 @@ func (m SettingsModel) submitSettingsInput() (SettingsModel, tea.Cmd) {
 		case "personal_base":
 			m.cfg.Settings.PersonalBase = val
 		}
-		if err := config.Save(m.cfg, m.configPath); err != nil {
-			m.message = fmt.Sprintf("Erro ao salvar: %s", err)
-			m.messageType = "error"
-		} else {
-			m.message = "Path atualizado com sucesso!"
-			m.messageType = "ok"
+		m.message, m.messageType = components.SaveConfig(m.cfg, m.configPath, "Path atualizado com sucesso!")
+		m.screen = settingsDone
+		return m, nil
+
+	case settingsEditGroupCustom:
+		if val == "" {
+			m.message = "Nome do grupo não pode ser vazio"
+			return m, nil
 		}
+		ref := m.allProjects[m.selectedProjIdx]
+		m.cfg.Categories[ref.catIdx].Projects[ref.projIdx].Group = val
+		m.message, m.messageType = components.SaveConfig(m.cfg, m.configPath, fmt.Sprintf("Grupo '%s' definido com sucesso!", val))
+		m.screen = settingsDone
+		return m, nil
+
+	case settingsEditGitLabToken:
+		m.cfg.GitLab.Token = val
+		successMsg := "Token GitLab salvo com sucesso!"
+		if val == "" {
+			successMsg = "Token GitLab removido!"
+		}
+		m.message, m.messageType = components.SaveConfig(m.cfg, m.configPath, successMsg)
 		m.screen = settingsDone
 		return m, nil
 	}

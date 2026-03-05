@@ -23,6 +23,15 @@ func (i projectItem) FilterValue() string {
 	return i.project.Alias + " " + i.project.Desc + " " + i.project.Path
 }
 
+// groupHeaderItem is a non-selectable separator between groups.
+type groupHeaderItem struct {
+	name string
+}
+
+func (i groupHeaderItem) Title() string       { return i.name }
+func (i groupHeaderItem) Description() string { return "" }
+func (i groupHeaderItem) FilterValue() string { return "" }
+
 // projectDelegate renders each item in the list.
 type projectDelegate struct{}
 
@@ -30,6 +39,13 @@ func (d projectDelegate) Height() int                             { return 2 }
 func (d projectDelegate) Spacing() int                            { return 0 }
 func (d projectDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
 func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	// Render group header
+	if gh, ok := item.(groupHeaderItem); ok {
+		label := theme.GroupHeaderStyle.Render("── " + strings.ToUpper(gh.name) + " ──")
+		fmt.Fprintf(w, "\n%s", label)
+		return
+	}
+
 	pi, ok := item.(projectItem)
 	if !ok {
 		return
@@ -70,9 +86,17 @@ type ProjectsModel struct {
 }
 
 func NewProjectsModel(cfg *config.Config, catID string, projects []config.Project) ProjectsModel {
-	items := make([]list.Item, len(projects))
-	for i, p := range projects {
-		items[i] = projectItem{project: p}
+	// Build items with group headers
+	groups, byGroup := config.GroupedProjects(projects)
+
+	var items []list.Item
+	for _, g := range groups {
+		if g != "" {
+			items = append(items, groupHeaderItem{name: g})
+		}
+		for _, p := range byGroup[g] {
+			items = append(items, projectItem{project: p})
+		}
 	}
 
 	// Find category name
@@ -95,12 +119,17 @@ func NewProjectsModel(cfg *config.Config, catID string, projects []config.Projec
 	l.Styles.FilterPrompt = lipgloss.NewStyle().Foreground(theme.Title)
 	l.Styles.FilterCursor = lipgloss.NewStyle().Foreground(theme.TitleSel)
 
-	return ProjectsModel{
+	m := ProjectsModel{
 		cfg:      cfg,
 		catID:    catID,
 		list:     l,
 		projects: projects,
 	}
+
+	// Ensure initial selection is not on a header
+	m.skipToProject(1)
+
+	return m
 }
 
 func (m ProjectsModel) Init() tea.Cmd {
@@ -108,6 +137,8 @@ func (m ProjectsModel) Init() tea.Cmd {
 }
 
 func (m ProjectsModel) Update(msg tea.Msg) (ProjectsModel, tea.Cmd) {
+	prevIdx := m.list.Index()
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		// Don't intercept keys when filtering
@@ -134,7 +165,38 @@ func (m ProjectsModel) Update(msg tea.Msg) (ProjectsModel, tea.Cmd) {
 
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
+
+	// Skip headers after navigation
+	if m.list.Index() != prevIdx {
+		if _, ok := m.list.SelectedItem().(groupHeaderItem); ok {
+			if m.list.Index() > prevIdx {
+				m.skipToProject(1)
+			} else {
+				m.skipToProject(-1)
+			}
+		}
+	}
+
 	return m, cmd
+}
+
+// skipToProject moves the cursor in the given direction (+1/-1) until a projectItem is found.
+func (m *ProjectsModel) skipToProject(dir int) {
+	items := m.list.Items()
+	idx := m.list.Index()
+	for idx >= 0 && idx < len(items) {
+		if _, ok := items[idx].(groupHeaderItem); !ok {
+			break
+		}
+		idx += dir
+	}
+	if idx < 0 {
+		idx = 0
+	}
+	if idx >= len(items) {
+		idx = len(items) - 1
+	}
+	m.list.Select(idx)
 }
 
 func (m ProjectsModel) View() string {

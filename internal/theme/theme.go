@@ -27,6 +27,19 @@ var (
 	SettingsGraySel = lipgloss.Color("#b0bec5")
 	SettingsBgSel   = lipgloss.Color("#37474f")
 
+	GitLabOrange    = lipgloss.Color("#fc6d26")
+	GitLabOrangeSel = lipgloss.Color("#fca326")
+	GitLabBgSel     = lipgloss.Color("#4e2800")
+
+	MROpen   = lipgloss.Color("#2da44e")
+	MRMerged = lipgloss.Color("#6e7dd6")
+	MRClosed = lipgloss.Color("#ff6b6b")
+
+	PipelineSuccess = lipgloss.Color("#2da44e")
+	PipelineFailed  = lipgloss.Color("#ff6b6b")
+	PipelineRunning = lipgloss.Color("#1f78d1")
+	PipelinePending = lipgloss.Color("#ffb347")
+
 	Error   = lipgloss.Color("#ff6b6b")
 	Warning = lipgloss.Color("#ffb347")
 	Success = lipgloss.Color("#ffd700")
@@ -146,6 +159,11 @@ var (
 					Bold(true).
 					Foreground(SettingsGraySel)
 
+	GroupHeaderStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(Dim).
+				PaddingLeft(2)
+
 	HeaderStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(Title).
@@ -153,6 +171,48 @@ var (
 
 	HelpStyle = lipgloss.NewStyle().
 			Foreground(Dim)
+
+	GitLabCardStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(GitLabOrange).
+			Padding(0, 1).
+			Width(36)
+
+	GitLabCardSelectedStyle = lipgloss.NewStyle().
+				Border(lipgloss.DoubleBorder()).
+				BorderForeground(GitLabOrangeSel).
+				Padding(0, 1).
+				Width(36).
+				Background(GitLabBgSel)
+
+	GitLabTitleStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(GitLabOrange)
+
+	GitLabTitleSelectedStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(GitLabOrangeSel)
+
+	MROpenStyle = lipgloss.NewStyle().
+			Foreground(MROpen)
+
+	MRMergedStyle = lipgloss.NewStyle().
+			Foreground(MRMerged)
+
+	MRClosedStyle = lipgloss.NewStyle().
+			Foreground(MRClosed)
+
+	PipelineSuccessStyle = lipgloss.NewStyle().
+				Foreground(PipelineSuccess)
+
+	PipelineFailedStyle = lipgloss.NewStyle().
+				Foreground(PipelineFailed)
+
+	PipelineRunningStyle = lipgloss.NewStyle().
+				Foreground(PipelineRunning)
+
+	PipelinePendingStyle = lipgloss.NewStyle().
+				Foreground(PipelinePending)
 
 	StatusRunning = lipgloss.NewStyle().
 			Foreground(Success)

@@ -19,9 +19,11 @@ categories:
       - alias: avita-alfa
         desc: "Alfandega Frontend Angular"
         path: sgi-modulo-alfandega-angular-typescript
+        group: "frontend"
       - alias: avita-api
         desc: "Alfandega API .NET"
         path: sgi-alfandega-gestao-api-dotnet
+        group: "api"
 
   - id: jobs
     name: "Jobs"
@@ -30,18 +32,23 @@ categories:
       - alias: avita-proc
         desc: "Alfandega Processamento Job"
         path: sgi-alfandega-processamento-arquivo-job-dotnet
+        group: "alfandega"
       - alias: avita-valid
         desc: "Alfandega Validacao Job"
         path: sgi-alfandega-validacao-job-dotnet
+        group: "alfandega"
       - alias: avita-import
         desc: "Alfandega Importacao Job"
         path: sgi-alfandega-importacao-job-dotnet
+        group: "alfandega"
       - alias: avita-col
         desc: "Pre-Alfandega Coleta Job"
         path: sgi-pre-alfandega-coleta-job-dotnet
+        group: "pre-alfandega"
       - alias: avita-pre-proc
         desc: "Pre-Alfandega Processamento Job"
         path: sgi-pre-alfandega-processamento-job-dotnet
+        group: "pre-alfandega"
 
   - id: financeiro
     name: "Financeiro"
@@ -50,21 +57,27 @@ categories:
       - alias: avita-fin
         desc: "SGA Modulo Financeiro Frontend"
         path: sga-modulo-financeiro-angular-typescript
+        group: "frontend"
       - alias: avita-fin-gs
         desc: "FIN Gestao Financeira Frontend"
         path: fin-modulo-gestao-financeira-angular-typescript
+        group: "frontend"
       - alias: avita-fin-api
         desc: "FIN Financeiro API .NET"
         path: fin-financeiro-api-dotnet
+        group: "api"
       - alias: avita-fin-gs-api
         desc: "FIN Gestao Financeira API .NET"
         path: fin-gestao-financeira-api-dotnet
+        group: "api"
       - alias: avita-fin-domain-lib
         desc: "Domain do Repo Fin"
         path: fin-domain-library-dotnet
+        group: "libs"
       - alias: avita-fin-repository
         desc: "Repo Fin"
         path: fin-repository-library-dotnet
+        group: "libs"
 
   - id: core
     name: "Core / APIs"
@@ -73,33 +86,47 @@ categories:
       - alias: avita-sgo
         desc: "SGO Backoffice API .NET"
         path: sgo-backoffice-api-dotnet
+        group: "api"
       - alias: avita-core
         desc: "SGA API Core"
         path: sga-api-core
+        group: "api"
       - alias: avita-apol
         desc: "SGA Apolice API"
         path: sga-apolice-api-dotnet
+        group: "api"
       - alias: avita-canc
         desc: "SGA Cancelamento Manual API"
         path: sga-cancelamento-manual-apolices-api-dotnet
+        group: "api"
       - alias: avita-pan
         desc: "PAN Notificacao API"
         path: pan-notificacao-api-dotnet
+        group: "api"
       - alias: avita-orq
         desc: "PAN Orquestrador API"
         path: pan-orquestrador-api-dotnet
+        group: "api"
       - alias: avita-docs
         desc: "Core Documents API"
         path: core-documents-api-dotnet
+        group: "api"
       - alias: avita-repo
         desc: "SGA Core Repository Library"
         path: sga-core-repository-library-dotnet
+        group: "libs"
       - alias: avita-domain
         desc: "SGA Domain Library .NET"
         path: sga-domain-library-dotnet
+        group: "libs"
       - alias: avita-plat
         desc: "Plataforma Portal Admin"
         path: plat-portal-admin-angular-typescript
+        group: "frontend"
+      - alias: avita-core-front
+        desc: "SGA Modulo Core Frontend Angular"
+        path: sga-modulo-core-angular-typescript
+        group: "frontend"
 
   - id: banco
     name: "Banco de Dados"
@@ -108,12 +135,15 @@ categories:
       - alias: avita-ddl
         desc: "SGA DDL Liquibase"
         path: sga-ddl-db-liquibase-sql
+        group: "ddl"
       - alias: avita-dml
         desc: "SGA DML Liquibase"
         path: sga-dml-db-liquibase-sql
+        group: "dml"
       - alias: avita-fin-db-relator
         desc: "DB Liquid Financeiro"
         path: fin-db-relatorio-ddl-db-liquibase-sql
+        group: "ddl"
 
   - id: infra
     name: "Infra"
@@ -125,6 +155,9 @@ categories:
       - alias: k3s
         desc: "Implementacao K3s Multi-Node (Oracle + Contabo)"
         path: Persike/implementacao-k3s
+      - alias: keycloak-poc
+        desc: "Keycloak Authorize API POC"
+        path: keycloak-authorize-api-poc
 
   - id: env
     name: "ENV"
@@ -141,15 +174,27 @@ categories:
       - alias: uni-front
         desc: "App Unificado Frontend"
         path: Persike/ProjetoUnificado/AppUnificado
+        group: "apps"
       - alias: uni-back
         desc: "App Unificado Backend"
         path: Persike/ProjetoUnificado/AppUnificadoBack
+        group: "apps"
       - alias: RPAs
         desc: "99frela - RPAs"
         path: Persike/99frela
+        group: "tools"
       - alias: ares-llm
         desc: "vm local llm"
         path: Persike/ares-llm
+        group: "tools"
+      - alias: uni-ms
+        desc: "App Unificado Microservice"
+        path: Persike/appunificado-ms
+        group: "apps"
+      - alias: njord-cli
+        desc: "Njord CLI - Project Manager TUI"
+        path: Persike/njord-cli
+        group: "tools"
 
 docker_stacks:
   - name: "GAP Stack"

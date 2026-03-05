@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/knadh/koanf/parsers/yaml"
@@ -18,9 +19,11 @@ type Settings struct {
 }
 
 type Project struct {
-	Alias string `koanf:"alias" yaml:"alias"`
-	Desc  string `koanf:"desc" yaml:"desc"`
-	Path  string `koanf:"path" yaml:"path"`
+	Alias      string `koanf:"alias" yaml:"alias"`
+	Desc       string `koanf:"desc" yaml:"desc"`
+	Path       string `koanf:"path" yaml:"path"`
+	Group      string `koanf:"group" yaml:"group,omitempty"`
+	GitLabPath string `koanf:"gitlab_path" yaml:"gitlab_path,omitempty"`
 }
 
 type Category struct {
@@ -36,10 +39,23 @@ type DockerStack struct {
 	Path string `koanf:"path" yaml:"path"`
 }
 
+type GitLabSettings struct {
+	Token string `koanf:"token" yaml:"token"`
+	URL   string `koanf:"url" yaml:"url,omitempty"`
+}
+
+func (g GitLabSettings) GitLabURL() string {
+	if g.URL != "" {
+		return g.URL
+	}
+	return "https://gitlab.com"
+}
+
 type Config struct {
-	Settings     Settings      `koanf:"settings" yaml:"settings"`
-	Categories   []Category    `koanf:"categories" yaml:"categories"`
-	DockerStacks []DockerStack `koanf:"docker_stacks" yaml:"docker_stacks"`
+	Settings     Settings       `koanf:"settings" yaml:"settings"`
+	GitLab       GitLabSettings `koanf:"gitlab" yaml:"gitlab"`
+	Categories   []Category     `koanf:"categories" yaml:"categories"`
+	DockerStacks []DockerStack  `koanf:"docker_stacks" yaml:"docker_stacks"`
 }
 
 func DefaultConfigPath() string {
@@ -152,6 +168,45 @@ func (cfg *Config) AllProjects() []Project {
 	return all
 }
 
+// GitLabProjectCount returns the number of projects with a gitlab_path configured.
+func (cfg *Config) GitLabProjectCount() int {
+	count := 0
+	for _, cat := range cfg.Categories {
+		for _, p := range cat.Projects {
+			if p.GitLabPath != "" {
+				count++
+			}
+		}
+	}
+	return count
+}
+
+// GroupedProjects returns projects sorted by group, preserving order within groups.
+// Projects without a group come last under an empty-string key.
+func GroupedProjects(projects []Project) (groups []string, byGroup map[string][]Project) {
+	byGroup = make(map[string][]Project)
+	seen := make(map[string]bool)
+	for _, p := range projects {
+		g := p.Group
+		if !seen[g] {
+			seen[g] = true
+			groups = append(groups, g)
+		}
+		byGroup[g] = append(byGroup[g], p)
+	}
+	// Sort: named groups first (alphabetically), then ungrouped
+	sort.SliceStable(groups, func(i, j int) bool {
+		if groups[i] == "" {
+			return false
+		}
+		if groups[j] == "" {
+			return true
+		}
+		return groups[i] < groups[j]
+	})
+	return groups, byGroup
+}
+
 // marshalYAML produces a clean YAML output for the config.
 func marshalYAML(cfg *Config) ([]byte, error) {
 	var b strings.Builder
@@ -160,6 +215,12 @@ func marshalYAML(cfg *Config) ([]byte, error) {
 	b.WriteString(fmt.Sprintf("  editor: %q\n", cfg.Settings.Editor))
 	b.WriteString(fmt.Sprintf("  projects_base: %q\n", cfg.Settings.ProjectsBase))
 	b.WriteString(fmt.Sprintf("  personal_base: %q\n", cfg.Settings.PersonalBase))
+
+	b.WriteString("\ngitlab:\n")
+	b.WriteString(fmt.Sprintf("  token: %q\n", cfg.GitLab.Token))
+	if cfg.GitLab.URL != "" {
+		b.WriteString(fmt.Sprintf("  url: %q\n", cfg.GitLab.URL))
+	}
 
 	b.WriteString("\ncategories:\n")
 	for _, cat := range cfg.Categories {
@@ -171,6 +232,12 @@ func marshalYAML(cfg *Config) ([]byte, error) {
 			b.WriteString(fmt.Sprintf("      - alias: %s\n", p.Alias))
 			b.WriteString(fmt.Sprintf("        desc: %q\n", p.Desc))
 			b.WriteString(fmt.Sprintf("        path: %q\n", p.Path))
+			if p.Group != "" {
+				b.WriteString(fmt.Sprintf("        group: %q\n", p.Group))
+			}
+			if p.GitLabPath != "" {
+				b.WriteString(fmt.Sprintf("        gitlab_path: %q\n", p.GitLabPath))
+			}
 		}
 	}
 
