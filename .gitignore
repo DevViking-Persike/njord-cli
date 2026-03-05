@@ -1,3 +1,5 @@
 njord-cli
+njord
 *.exe
+*.png
 dist/
