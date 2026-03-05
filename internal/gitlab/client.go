@@ -3,14 +3,17 @@ package gitlab
 import (
 	"fmt"
 	"sort"
+	"sync"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go"
 )
 
 type Client struct {
-	gl       *gl.Client
-	username string
+	gl           *gl.Client
+	username     string
+	projectPaths map[int64]string
+	pathsMu      sync.Mutex
 }
 
 func NewClient(token, url string) (*Client, error) {
@@ -23,7 +26,7 @@ func NewClient(token, url string) (*Client, error) {
 		return nil, fmt.Errorf("creating gitlab client: %w", err)
 	}
 
-	c := &Client{gl: client}
+	c := &Client{gl: client, projectPaths: make(map[int64]string)}
 
 	// Fetch current user to store username for filtering
 	user, _, err := client.Users.CurrentUser()
@@ -43,12 +46,13 @@ func (c *Client) Close() {
 }
 
 func (c *Client) ListMyOpenMRs() ([]MergeRequestInfo, error) {
+	threeDaysAgo := time.Now().AddDate(0, 0, -3)
 	opts := &gl.ListMergeRequestsOptions{
-		Scope:    gl.Ptr("created_by_me"),
-		State:    gl.Ptr("opened"),
-		Approved: gl.Ptr("no"),
-		OrderBy:  gl.Ptr("created_at"),
-		Sort:     gl.Ptr("desc"),
+		Scope:        gl.Ptr("created_by_me"),
+		State:        gl.Ptr("opened"),
+		OrderBy:      gl.Ptr("created_at"),
+		Sort:         gl.Ptr("desc"),
+		CreatedAfter: &threeDaysAgo,
 		ListOptions: gl.ListOptions{
 			PerPage: int64(10),
 		},
@@ -202,12 +206,24 @@ func (c *Client) ListRecentPushes(days int) ([]RecentPush, error) {
 	return result, nil
 }
 
-// ResolveProjectPath returns the web path for a project ID.
+// ResolveProjectPath returns the web path for a project ID (cached).
 func (c *Client) ResolveProjectPath(projectID int64) (string, error) {
+	c.pathsMu.Lock()
+	if path, ok := c.projectPaths[projectID]; ok {
+		c.pathsMu.Unlock()
+		return path, nil
+	}
+	c.pathsMu.Unlock()
+
 	project, _, err := c.gl.Projects.GetProject(projectID, nil)
 	if err != nil {
 		return "", err
 	}
+
+	c.pathsMu.Lock()
+	c.projectPaths[projectID] = project.PathWithNamespace
+	c.pathsMu.Unlock()
+
 	return project.PathWithNamespace, nil
 }
 

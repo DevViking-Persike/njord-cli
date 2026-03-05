@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	dockerclient "github.com/docker/docker/client"
@@ -121,17 +122,21 @@ func (c *Client) GetLogs(composePath, projectName string, tail int) (string, err
 
 // --- Internal helpers ---
 
-func (c *Client) listByProject(projectName string) []ContainerInfo {
+func (c *Client) listContainersByLabel(projectName string, all bool) ([]types.Container, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	f := filters.NewArgs()
 	f.Add("label", "com.docker.compose.project="+projectName)
 
-	containers, err := c.cli.ContainerList(ctx, container.ListOptions{
-		All:     true,
+	return c.cli.ContainerList(ctx, container.ListOptions{
+		All:     all,
 		Filters: f,
 	})
+}
+
+func (c *Client) listByProject(projectName string) []ContainerInfo {
+	containers, err := c.listContainersByLabel(projectName, true)
 	if err != nil {
 		return nil
 	}
@@ -281,16 +286,7 @@ func (c *Client) logsByLabel(projectName string, tail int) (string, error) {
 }
 
 func (c *Client) containerIDsByLabel(projectName string, all bool) []string {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	f := filters.NewArgs()
-	f.Add("label", "com.docker.compose.project="+projectName)
-
-	containers, err := c.cli.ContainerList(ctx, container.ListOptions{
-		All:     all,
-		Filters: f,
-	})
+	containers, err := c.listContainersByLabel(projectName, all)
 	if err != nil {
 		return nil
 	}

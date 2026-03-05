@@ -185,9 +185,9 @@ func (m GitLabModel) View() string {
 				approvalTag := m.renderApprovalTag(ref.project.GitLabPath)
 				pathTag := theme.DimStyle.Render(" [" + ref.project.GitLabPath + "]")
 				if i == m.cursor {
-					b.WriteString("  " + icon + " " + theme.GitLabTitleSelectedStyle.Render("▶ "+label) + approvalTag + pathTag + "\n")
+					b.WriteString("  " + icon + " " + theme.GitLabTitleSelectedStyle.Render("▶ "+label) + pathTag + approvalTag + "\n")
 				} else {
-					b.WriteString("  " + icon + " " + theme.TextStyle.Render("  "+label) + approvalTag + pathTag + "\n")
+					b.WriteString("  " + icon + " " + theme.TextStyle.Render("  "+label) + pathTag + approvalTag + "\n")
 				}
 			}
 			if end < len(m.projects) {
@@ -324,14 +324,7 @@ func (m GitLabModel) renderApprovalTag(gitlabPath string) string {
 	if !ok || a == nil {
 		return ""
 	}
-	if a.Approved {
-		return " " + theme.PipelineSuccessStyle.Render("✓ aprovado")
-	}
-	label := fmt.Sprintf("⏳ %d/%d", a.ApprovalsGiven, a.ApprovalsRequired)
-	if a.RuleName != "" {
-		label += " " + a.RuleName
-	}
-	return " " + theme.PipelinePendingStyle.Render(label)
+	return " " + renderApprovalTag(a)
 }
 
 func spinnerTick() tea.Cmd {

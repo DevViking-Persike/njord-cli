@@ -67,6 +67,8 @@ type GridModel struct {
 	offset       int // scroll offset in rows
 	recentPushes []RecentPushAlias
 	pendingMRs   []PendingMRAlias
+	pushError    string
+	mrsError     string
 }
 
 func NewGridModel(cfg *config.Config) GridModel {
@@ -186,27 +188,10 @@ func (m GridModel) View() string {
 	nameStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#daa520"))
 	title := "  " + runeStyle.Render("ᚾ") + " " + nameStyle.Render("N J O R D")
 
-	hasPushes := len(m.recentPushes) > 0
-	hasPending := len(m.pendingMRs) > 0
+	hasData := len(m.recentPushes) > 0 || len(m.pendingMRs) > 0 || m.pushError != "" || m.mrsError != ""
 
-	if hasPushes || hasPending {
-		var headerParts []string
-		if hasPushes {
-			headerParts = append(headerParts, m.renderPushBox())
-		}
-		if hasPending {
-			headerParts = append(headerParts, m.renderMRBox())
-		}
-		headerParts = append(headerParts, title)
-		// Interleave "  " between parts for spacing
-		var joined []string
-		for i, p := range headerParts {
-			if i > 0 {
-				joined = append(joined, "  ")
-			}
-			joined = append(joined, p)
-		}
-		b.WriteString(lipgloss.JoinHorizontal(lipgloss.Center, joined...))
+	if hasData {
+		b.WriteString(lipgloss.JoinHorizontal(lipgloss.Center, m.renderApprovalBox(), "  ", title))
 	} else {
 		b.WriteString(title)
 	}
@@ -248,51 +233,52 @@ func (m GridModel) View() string {
 	return b.String()
 }
 
-func (m GridModel) renderPushBox() string {
+func (m GridModel) renderApprovalBox() string {
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#8b6508")).
 		Padding(0, 1).
-		Width(34)
+		Width(40)
 
 	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.Title)
+	sectionStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#888888"))
 	var lines []string
-	lines = append(lines, titleStyle.Render("Aprovações recentes"))
 
-	for _, p := range m.recentPushes {
-		icon := ""
-		if p.Approval != "" {
-			icon = p.Approval + " "
+	if m.pushError != "" {
+		lines = append(lines, titleStyle.Render("Aprovados"))
+		lines = append(lines, theme.DimStyle.Render("erro: "+m.pushError))
+	} else if len(m.recentPushes) > 0 {
+		lines = append(lines, titleStyle.Render("Aprovados"))
+		for _, p := range m.recentPushes {
+			icon := ""
+			if p.Approval != "" {
+				icon = p.Approval + " "
+			}
+			alias := theme.GitLabTitleStyle.Render(p.Alias)
+			lines = append(lines, icon+alias)
 		}
-		alias := theme.GitLabTitleStyle.Render(p.Alias)
-		ago := theme.DimStyle.Render(" " + p.Ago)
-		lines = append(lines, icon+alias+ago)
 	}
 
-	content := strings.Join(lines, "\n")
-	return boxStyle.Render(content)
-}
-
-func (m GridModel) renderMRBox() string {
-	boxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#8b6508")).
-		Padding(0, 1).
-		Width(34)
-
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.Title)
-	var lines []string
-	lines = append(lines, titleStyle.Render("MRs pendentes"))
-
-	for _, mr := range m.pendingMRs {
-		icon := ""
-		if mr.Approval != "" {
-			icon = mr.Approval + " "
+	if m.mrsError != "" {
+		if len(lines) > 0 {
+			lines = append(lines, "")
 		}
-		alias := theme.GitLabTitleStyle.Render(mr.Alias)
-		iid := theme.DimStyle.Render(fmt.Sprintf(" !%d", mr.IID))
-		ago := theme.DimStyle.Render(" " + mr.Ago)
-		lines = append(lines, icon+alias+iid+ago)
+		lines = append(lines, sectionStyle.Render("Pendentes"))
+		lines = append(lines, theme.DimStyle.Render("erro: "+m.mrsError))
+	} else if len(m.pendingMRs) > 0 {
+		if len(lines) > 0 {
+			lines = append(lines, "")
+		}
+		lines = append(lines, sectionStyle.Render("Pendentes"))
+		for _, mr := range m.pendingMRs {
+			icon := ""
+			if mr.Approval != "" {
+				icon = mr.Approval + " "
+			}
+			alias := theme.GitLabTitleStyle.Render(mr.Alias)
+			iid := theme.DimStyle.Render(fmt.Sprintf(" !%d", mr.IID))
+			lines = append(lines, icon+alias+iid)
+		}
 	}
 
 	content := strings.Join(lines, "\n")

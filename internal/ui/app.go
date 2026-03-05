@@ -2,7 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/DevViking-Persike/njord-cli/internal/config"
@@ -13,15 +12,23 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// Async message for GitLab client initialization
+type gitlabInitMsg struct {
+	client *gitlab.Client
+	cfg    *config.Config
+	err    error
+}
+
 // Async message for recent pushes
 type recentPushesMsg struct {
 	pushes []RecentPushAlias
-	client *gitlab.Client
+	err    error
 }
 
 // Async message for pending MRs
 type pendingMRsMsg struct {
 	mrs []PendingMRAlias
+	err error
 }
 
 type Screen int
@@ -87,8 +94,7 @@ func NewApp(cfg *config.Config, dockerClient *docker.Client, configPath string) 
 func (m AppModel) Init() tea.Cmd {
 	cmds := []tea.Cmd{m.grid.Init()}
 	if m.config.GitLab.Token != "" {
-		cmds = append(cmds, m.fetchRecentPushes())
-		cmds = append(cmds, m.fetchPendingMRs())
+		cmds = append(cmds, m.initGitLabFetches())
 	}
 	return tea.Batch(cmds...)
 }
@@ -109,15 +115,28 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.gitlabActions.SetSize(msg.Width, msg.Height)
 		return m, nil
 
+	case gitlabInitMsg:
+		if msg.err != nil {
+			return m, nil
+		}
+		m.gitlabClient = msg.client
+		return m, tea.Batch(
+			fetchRecentPushes(msg.client, msg.cfg),
+			fetchPendingMRs(msg.client, msg.cfg),
+		)
+
 	case recentPushesMsg:
 		m.grid.SetRecentPushes(msg.pushes)
-		if msg.client != nil {
-			m.gitlabClient = msg.client
+		if msg.err != nil {
+			m.grid.pushError = msg.err.Error()
 		}
 		return m, nil
 
 	case pendingMRsMsg:
 		m.grid.SetPendingMRs(msg.mrs)
+		if msg.err != nil {
+			m.grid.mrsError = msg.err.Error()
+		}
 		return m, nil
 
 	case tea.KeyMsg:
@@ -424,7 +443,7 @@ func (m AppModel) updateGitLabActions(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m AppModel) fetchRecentPushes() tea.Cmd {
+func (m AppModel) initGitLabFetches() tea.Cmd {
 	token := m.config.GitLab.Token
 	url := m.config.GitLab.GitLabURL()
 	cfg := m.config
@@ -432,23 +451,20 @@ func (m AppModel) fetchRecentPushes() tea.Cmd {
 	return func() tea.Msg {
 		client, err := gitlab.NewClient(token, url)
 		if err != nil {
-			return recentPushesMsg{}
+			return gitlabInitMsg{err: err}
 		}
+		return gitlabInitMsg{client: client, cfg: cfg}
+	}
+}
 
+func fetchRecentPushes(client *gitlab.Client, cfg *config.Config) tea.Cmd {
+	return func() tea.Msg {
 		pushes, err := client.ListRecentPushes(3)
 		if err != nil {
-			return recentPushesMsg{client: client}
+			return recentPushesMsg{err: err}
 		}
 
-		// Build gitlab_path -> alias map
-		pathToAlias := make(map[string]string)
-		for _, cat := range cfg.Categories {
-			for _, p := range cat.Projects {
-				if p.GitLabPath != "" {
-					pathToAlias[p.GitLabPath] = p.Alias
-				}
-			}
-		}
+		pathToAlias := cfg.PathToAliasMap()
 
 		// Filter to last 6 hours only
 		sixHoursAgo := time.Now().Add(-6 * time.Hour)
@@ -493,51 +509,24 @@ func (m AppModel) fetchRecentPushes() tea.Cmd {
 			result = result[:6]
 		}
 
-		return recentPushesMsg{pushes: result, client: client}
+		return recentPushesMsg{pushes: result}
 	}
 }
 
-func (m AppModel) fetchPendingMRs() tea.Cmd {
-	token := m.config.GitLab.Token
-	url := m.config.GitLab.GitLabURL()
-	cfg := m.config
-
+func fetchPendingMRs(client *gitlab.Client, cfg *config.Config) tea.Cmd {
 	return func() tea.Msg {
-		client, err := gitlab.NewClient(token, url)
-		if err != nil {
-			return pendingMRsMsg{}
-		}
-
 		mrs, err := client.ListMyOpenMRs()
 		if err != nil {
-			return pendingMRsMsg{}
+			return pendingMRsMsg{err: err}
 		}
 
-		// Build gitlab_path -> alias map
-		pathToAlias := make(map[string]string)
-		for _, cat := range cfg.Categories {
-			for _, p := range cat.Projects {
-				if p.GitLabPath != "" {
-					pathToAlias[p.GitLabPath] = p.Alias
-				}
-			}
-		}
-
-		// Build projectID -> path cache
-		projectPaths := make(map[int64]string)
+		pathToAlias := cfg.PathToAliasMap()
 
 		var result []PendingMRAlias
 		for _, mr := range mrs {
-			// Resolve project path from ID
-			projectPath, ok := projectPaths[mr.ProjectID]
-			if !ok {
-				resolved, err := client.ResolveProjectPath(mr.ProjectID)
-				if err != nil {
-					// Use project ID as fallback
-					resolved = fmt.Sprintf("project/%d", mr.ProjectID)
-				}
-				projectPaths[mr.ProjectID] = resolved
-				projectPath = resolved
+			projectPath, err := client.ResolveProjectPath(mr.ProjectID)
+			if err != nil {
+				continue
 			}
 
 			alias := projectPath
@@ -545,17 +534,14 @@ func (m AppModel) fetchPendingMRs() tea.Cmd {
 				alias = a
 			}
 
-			// Fetch approval info (best-effort, skip fallback paths)
+			approval := client.GetMRApproval(projectPath, mr.IID, mr.Title)
+			if approval != nil && approval.Approved {
+				continue // já aprovado, não é pendente
+			}
+
 			approvalIcon := ""
-			if !strings.HasPrefix(projectPath, "project/") {
-				approval := client.GetMRApproval(projectPath, mr.IID, mr.Title)
-				if approval != nil {
-					if approval.Approved {
-						approvalIcon = "✓"
-					} else if approval.ApprovalsRequired > 0 {
-						approvalIcon = fmt.Sprintf("⏳ %d/%d", approval.ApprovalsGiven, approval.ApprovalsRequired)
-					}
-				}
+			if approval != nil && approval.ApprovalsRequired > 0 {
+				approvalIcon = fmt.Sprintf("⏳ %d/%d", approval.ApprovalsGiven, approval.ApprovalsRequired)
 			}
 
 			result = append(result, PendingMRAlias{

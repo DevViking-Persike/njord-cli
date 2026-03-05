@@ -181,6 +181,19 @@ func (cfg *Config) GitLabProjectCount() int {
 	return count
 }
 
+// PathToAliasMap returns a map from gitlab_path to project alias.
+func (cfg *Config) PathToAliasMap() map[string]string {
+	m := make(map[string]string)
+	for _, cat := range cfg.Categories {
+		for _, p := range cat.Projects {
+			if p.GitLabPath != "" {
+				m[p.GitLabPath] = p.Alias
+			}
+		}
+	}
+	return m
+}
+
 // GroupedProjects returns projects sorted by group, preserving order within groups.
 // Projects without a group come last under an empty-string key.
 func GroupedProjects(projects []Project) (groups []string, byGroup map[string][]Project) {
