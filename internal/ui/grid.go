@@ -255,7 +255,8 @@ func (m GridModel) renderApprovalBox() string {
 				icon = p.Approval + " "
 			}
 			alias := theme.GitLabTitleStyle.Render(p.Alias)
-			lines = append(lines, icon+alias)
+			ago := theme.DimStyle.Render(" " + p.Ago)
+			lines = append(lines, icon+alias+ago)
 		}
 	}
 
@@ -277,7 +278,8 @@ func (m GridModel) renderApprovalBox() string {
 			}
 			alias := theme.GitLabTitleStyle.Render(mr.Alias)
 			iid := theme.DimStyle.Render(fmt.Sprintf(" !%d", mr.IID))
-			lines = append(lines, icon+alias+iid)
+			ago := theme.DimStyle.Render(" " + mr.Ago)
+			lines = append(lines, icon+alias+iid+ago)
 		}
 	}
 

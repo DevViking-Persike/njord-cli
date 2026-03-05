@@ -12,6 +12,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// Periodic refresh tick
+type gitlabRefreshTickMsg struct{}
+
 // Async message for GitLab client initialization
 type gitlabInitMsg struct {
 	client *gitlab.Client
@@ -123,7 +126,18 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(
 			fetchRecentPushes(msg.client, msg.cfg),
 			fetchPendingMRs(msg.client, msg.cfg),
+			scheduleRefresh(),
 		)
+
+	case gitlabRefreshTickMsg:
+		if m.gitlabClient != nil {
+			return m, tea.Batch(
+				fetchRecentPushes(m.gitlabClient, m.config),
+				fetchPendingMRs(m.gitlabClient, m.config),
+				scheduleRefresh(),
+			)
+		}
+		return m, nil
 
 	case recentPushesMsg:
 		m.grid.SetRecentPushes(msg.pushes)
@@ -204,6 +218,21 @@ func (m AppModel) View() string {
 // GetResult returns the result after the TUI exits.
 func (m AppModel) GetResult() *Result {
 	return m.result
+}
+
+// refreshGrid recria o grid com a config atualizada, preservando dados do header.
+func (m *AppModel) refreshGrid() {
+	pushes := m.grid.recentPushes
+	mrs := m.grid.pendingMRs
+	pushErr := m.grid.pushError
+	mrsErr := m.grid.mrsError
+
+	m.grid = NewGridModel(m.config)
+	m.grid.SetSize(m.width, m.height)
+	m.grid.recentPushes = pushes
+	m.grid.pendingMRs = mrs
+	m.grid.pushError = pushErr
+	m.grid.mrsError = mrsErr
 }
 
 // --- Screen transition handlers ---
@@ -355,8 +384,7 @@ func (m AppModel) updateAddProject(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Reload config in case it was modified
 		if updated, err := config.Load(m.configPath); err == nil {
 			m.config = updated
-			m.grid = NewGridModel(m.config)
-			m.grid.SetSize(m.width, m.height)
+			m.refreshGrid()
 		}
 		m.screen = ScreenGrid
 		return m, nil
@@ -391,8 +419,7 @@ func (m AppModel) updateSettings(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Reload config in case it was modified
 		if updated, err := config.Load(m.configPath); err == nil {
 			m.config = updated
-			m.grid = NewGridModel(m.config)
-			m.grid.SetSize(m.width, m.height)
+			m.refreshGrid()
 		}
 		m.screen = ScreenGrid
 		return m, nil
@@ -409,8 +436,7 @@ func (m AppModel) updateGitLab(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Reload config in case gitlab_path was modified
 		if updated, err := config.Load(m.configPath); err == nil {
 			m.config = updated
-			m.grid = NewGridModel(m.config)
-			m.grid.SetSize(m.width, m.height)
+			m.refreshGrid()
 		}
 		m.screen = ScreenGrid
 		return m, nil
@@ -559,6 +585,12 @@ func fetchPendingMRs(client *gitlab.Client, cfg *config.Config) tea.Cmd {
 
 		return pendingMRsMsg{mrs: result}
 	}
+}
+
+func scheduleRefresh() tea.Cmd {
+	return tea.Tick(2*time.Minute, func(time.Time) tea.Msg {
+		return gitlabRefreshTickMsg{}
+	})
 }
 
 func shellQuote(s string) string {
