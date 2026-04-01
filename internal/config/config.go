@@ -63,7 +63,7 @@ func DefaultConfigPath() string {
 	return filepath.Join(home, ".config", "njord", "njord.yaml")
 }
 
-func expandPath(path string) string {
+func ExpandPath(path string) string {
 	if strings.HasPrefix(path, "~/") {
 		home, _ := os.UserHomeDir()
 		return filepath.Join(home, path[2:])
@@ -127,6 +127,11 @@ func (cfg *Config) ResolveProjectPath(p Project) string {
 		return path
 	}
 
+	// Absolute paths
+	if filepath.IsAbs(path) {
+		return path
+	}
+
 	// Personal projects (contain "Persike/")
 	if strings.Contains(path, "Persike/") || strings.HasPrefix(path, "Persike/") {
 		home, _ := os.UserHomeDir()
@@ -135,18 +140,18 @@ func (cfg *Config) ResolveProjectPath(p Project) string {
 
 	// Environment projects
 	if strings.HasPrefix(path, "env/") {
-		base := expandPath(cfg.Settings.ProjectsBase)
+		base := ExpandPath(cfg.Settings.ProjectsBase)
 		return filepath.Join(base, path)
 	}
 
 	// Default: projects base
-	base := expandPath(cfg.Settings.ProjectsBase)
+	base := ExpandPath(cfg.Settings.ProjectsBase)
 	return filepath.Join(base, path)
 }
 
 // ResolveDockerComposePath returns the full path to docker-compose.yml for a stack.
 func (cfg *Config) ResolveDockerComposePath(stack DockerStack) string {
-	base := expandPath(cfg.Settings.ProjectsBase)
+	base := ExpandPath(cfg.Settings.ProjectsBase)
 	return filepath.Join(base, stack.Path, "docker-compose.yml")
 }
 

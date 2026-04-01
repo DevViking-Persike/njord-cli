@@ -195,6 +195,10 @@ categories:
         desc: "Njord CLI - Project Manager TUI"
         path: Persike/njord-cli
         group: "tools"
+      - alias: prompts
+        desc: "Prompts - Repositorio de Prompts"
+        path: Persike/Prompts
+        group: "tools"
 
 docker_stacks:
   - name: "GAP Stack"

@@ -18,6 +18,7 @@ type addStep int
 const (
 	stepGitURL addStep = iota
 	stepDestination
+	stepCustomPath
 	stepClone
 	stepAlias
 	stepDescription
@@ -52,6 +53,7 @@ type AddProjectModel struct {
 	group       string
 
 	// UI state
+	destPaths   []string
 	inputBuf    string
 	cursor      int
 	options     []string
@@ -101,6 +103,8 @@ func (m AddProjectModel) Update(msg tea.Msg) (AddProjectModel, tea.Cmd) {
 			return m.handleTextInput(msg)
 		case stepDestination:
 			return m.handleDestinationSelect(msg)
+		case stepCustomPath:
+			return m.handleTextInput(msg)
 		case stepClone:
 			return m, nil
 		case stepAlias:
@@ -153,6 +157,9 @@ func (m AddProjectModel) View() string {
 	}
 	// Map custom cat steps to the Categoria step for progress display
 	displayStep := m.step
+	if displayStep == stepCustomPath {
+		displayStep = stepDestination
+	}
 	if displayStep == stepCustomCatName || displayStep == stepCustomCatSub {
 		displayStep = stepCategory
 	}
@@ -182,8 +189,7 @@ func (m AddProjectModel) View() string {
 
 	case stepDestination:
 		b.WriteString("  " + theme.TextStyle.Render("Destino do clone:") + "\n\n")
-		options := []string{"~/Avita (Projetos)", "~/Persike (Pessoal)", "Custom path"}
-		for i, opt := range options {
+		for i, opt := range m.options {
 			if i == m.cursor {
 				b.WriteString("  " + theme.TitleSelectedStyle.Render("▶ "+opt) + "\n")
 			} else {
@@ -191,6 +197,14 @@ func (m AddProjectModel) View() string {
 			}
 		}
 		b.WriteString("\n" + theme.HelpStyle.Render("  ↑↓ navigate  enter select  esc back"))
+
+	case stepCustomPath:
+		b.WriteString("  " + theme.TextStyle.Render("Caminho a partir de ~:") + "\n\n")
+		b.WriteString("  " + theme.TitleStyle.Render("~/") + m.inputBuf + theme.DimStyle.Render("█") + "\n")
+		if m.message != "" {
+			b.WriteString("\n  " + theme.ErrorStyle.Render(m.message) + "\n")
+		}
+		b.WriteString("\n" + theme.HelpStyle.Render("  enter confirmar  esc voltar"))
 
 	case stepClone:
 		b.WriteString("  " + theme.TextStyle.Render("Clonando repositório...") + "\n\n")
@@ -304,6 +318,10 @@ func (m AddProjectModel) handleTextInput(msg tea.KeyMsg) (AddProjectModel, tea.C
 	case "esc":
 		if m.step == stepGitURL {
 			m.goBack = true
+		} else if m.step == stepCustomPath || m.step == stepAlias {
+			m.buildDestinationOptions()
+			m.step = stepDestination
+			m.message = ""
 		} else if m.step == stepCustomCatName {
 			m.step = stepCategory
 			m.message = ""
@@ -351,9 +369,36 @@ func (m AddProjectModel) submitTextInput() (AddProjectModel, tea.Cmd) {
 		m.gitURL = url
 		m.inputBuf = ""
 		m.message = ""
-		m.cursor = 0
+		m.buildDestinationOptions()
 		m.step = stepDestination
 		return m, nil
+
+	case stepCustomPath:
+		customDir := strings.TrimSpace(m.inputBuf)
+		if customDir == "" {
+			m.message = "Caminho não pode ser vazio"
+			return m, nil
+		}
+		home, _ := os.UserHomeDir()
+		repoName := extractRepoName(m.gitURL)
+		basePath := filepath.Join(home, customDir)
+		m.clonePath = filepath.Join(basePath, repoName)
+		m.destination = "custom"
+		m.inputBuf = ""
+		m.message = ""
+
+		if _, err := os.Stat(m.clonePath); err == nil {
+			m.message = "Diretório já existe, pulando clone"
+			m.messageType = "info"
+			m.alias = suggestAlias(m.gitURL)
+			m.inputBuf = m.alias
+			m.step = stepAlias
+			return m, nil
+		}
+
+		m.step = stepClone
+		m.cloning = true
+		return m, m.doClone()
 
 	case stepAlias:
 		alias := strings.TrimSpace(m.inputBuf)
@@ -438,26 +483,32 @@ func (m AddProjectModel) handleDestinationSelect(msg tea.KeyMsg) (AddProjectMode
 			m.cursor--
 		}
 	case "down", "j":
-		if m.cursor < 2 {
+		if m.cursor < len(m.options)-1 {
 			m.cursor++
 		}
 	case "esc":
 		m.step = stepGitURL
 		m.inputBuf = m.gitURL
 	case "enter":
-		home, _ := os.UserHomeDir()
 		repoName := extractRepoName(m.gitURL)
 
-		switch m.cursor {
-		case 0:
-			m.destination = "avita"
-			m.clonePath = filepath.Join(home, "Avita", repoName)
-		case 1:
+		// Last option is always "Custom"
+		if m.cursor == len(m.options)-1 {
+			m.inputBuf = ""
+			m.message = ""
+			m.step = stepCustomPath
+			return m, nil
+		}
+
+		selectedBase := m.destPaths[m.cursor]
+		m.clonePath = filepath.Join(selectedBase, repoName)
+
+		// Determine destination type for relative path calculation
+		persBase := config.ExpandPath(m.cfg.Settings.PersonalBase)
+		if strings.HasPrefix(selectedBase, persBase) {
 			m.destination = "pessoal"
-			m.clonePath = filepath.Join(home, "Persike", repoName)
-		case 2:
-			m.destination = "custom"
-			m.clonePath = filepath.Join(home, repoName)
+		} else {
+			m.destination = "avita"
 		}
 
 		if _, err := os.Stat(m.clonePath); err == nil {
@@ -501,6 +552,51 @@ func (m AddProjectModel) handleCategorySelect(msg tea.KeyMsg) (AddProjectModel, 
 		}
 	}
 	return m, nil
+}
+
+func (m *AddProjectModel) buildDestinationOptions() {
+	m.options = nil
+	m.destPaths = nil
+
+	addBase := func(base, label string) {
+		expanded := config.ExpandPath(base)
+		if expanded == "" {
+			return
+		}
+
+		m.options = append(m.options, base+" ("+label+")")
+		m.destPaths = append(m.destPaths, expanded)
+
+		// Scan for subdirectories that are not git repos (container folders)
+		entries, err := os.ReadDir(expanded)
+		if err != nil {
+			return
+		}
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			subPath := filepath.Join(expanded, e.Name())
+			// Skip git repos - they are projects, not containers
+			if _, err := os.Stat(filepath.Join(subPath, ".git")); err == nil {
+				continue
+			}
+			m.options = append(m.options, "  "+base+"/"+e.Name())
+			m.destPaths = append(m.destPaths, subPath)
+		}
+	}
+
+	addBase(m.cfg.Settings.ProjectsBase, "Projetos")
+
+	persBase := config.ExpandPath(m.cfg.Settings.PersonalBase)
+	projBase := config.ExpandPath(m.cfg.Settings.ProjectsBase)
+	if persBase != projBase {
+		addBase(m.cfg.Settings.PersonalBase, "Pessoal")
+	}
+
+	m.options = append(m.options, "Custom (nova pasta)")
+	m.destPaths = append(m.destPaths, "")
+	m.cursor = 0
 }
 
 func (m *AddProjectModel) buildGroupOptions() {
@@ -610,14 +706,14 @@ func (m AddProjectModel) doClone() tea.Cmd {
 
 func (m *AddProjectModel) saveProject() error {
 	var relPath string
-	home, _ := os.UserHomeDir()
-	avitaBase := filepath.Join(home, "Avita")
-	persBase := filepath.Join(home, "Persike")
+	avitaBase := config.ExpandPath(m.cfg.Settings.ProjectsBase)
+	persBase := config.ExpandPath(m.cfg.Settings.PersonalBase)
 
 	if strings.HasPrefix(m.clonePath, avitaBase) {
 		relPath, _ = filepath.Rel(avitaBase, m.clonePath)
 	} else if strings.HasPrefix(m.clonePath, persBase) {
-		relPath = "Persike/" + filepath.Base(m.clonePath)
+		home, _ := os.UserHomeDir()
+		relPath, _ = filepath.Rel(home, m.clonePath)
 	} else {
 		relPath = m.clonePath
 	}

@@ -321,6 +321,37 @@ func (c *Client) GetMRApproval(projectPath string, mrIID int64, mrTitle string) 
 	return c.fetchApprovalInfo(projectPath, mrIID, mrTitle)
 }
 
+// TriggerMRPipeline finds the open MR for a branch and creates a merge request pipeline.
+func (c *Client) TriggerMRPipeline(projectPath, branch string) (*PipelineInfo, error) {
+	// Busca MR aberto para esta branch
+	opts := &gl.ListProjectMergeRequestsOptions{
+		State:        gl.Ptr("opened"),
+		SourceBranch: gl.Ptr(branch),
+		ListOptions:  gl.ListOptions{PerPage: int64(1)},
+	}
+	mrs, _, err := c.gl.MergeRequests.ListProjectMergeRequests(projectPath, opts)
+	if err != nil {
+		return nil, fmt.Errorf("buscando MR para branch %s: %w", branch, err)
+	}
+	if len(mrs) == 0 {
+		return nil, fmt.Errorf("nenhum MR aberto encontrado para branch %s", branch)
+	}
+
+	mr := mrs[0]
+	pipeline, _, err := c.gl.MergeRequests.CreateMergeRequestPipeline(projectPath, mr.IID)
+	if err != nil {
+		return nil, fmt.Errorf("criando pipeline do MR !%d: %w", mr.IID, err)
+	}
+
+	return &PipelineInfo{
+		ID:        pipeline.ID,
+		Status:    pipeline.Status,
+		Ref:       pipeline.Ref,
+		CreatedAt: *pipeline.CreatedAt,
+		URL:       pipeline.WebURL,
+	}, nil
+}
+
 func (c *Client) fetchApprovalInfo(projectPath string, mrIID int64, mrTitle string) *MRApprovalInfo {
 	rules, _, err := c.gl.MergeRequestApprovals.GetApprovalRules(projectPath, mrIID)
 	if err != nil || len(rules) == 0 {
