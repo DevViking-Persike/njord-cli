@@ -68,18 +68,20 @@ func TestResolveEpicKey(t *testing.T) {
 }
 
 func TestParseIssue_FullFields(t *testing.T) {
+	status := rawStatusField{Name: "In Progress"}
+	status.Category.Key = "indeterminate"
 	r := rawIssue{
 		Key: "PROJ-1",
 		Fields: rawIssueFlds{
 			Summary:   "Fix login",
-			Status:    rawNamedField{Name: "In Progress"},
+			Status:    status,
 			IssueType: rawNamedField{Name: "Task"},
 			Assignee:  &rawAssigneeFld{DisplayName: "Victor"},
 			EpicLink:  "EPIC-1",
 		},
 	}
 	got := parseIssue(r)
-	want := Issue{Key: "PROJ-1", Summary: "Fix login", Status: "In Progress", Type: "Task", Assignee: "Victor", EpicKey: "EPIC-1"}
+	want := Issue{Key: "PROJ-1", Summary: "Fix login", Status: "In Progress", StatusCategory: "indeterminate", Type: "Task", Assignee: "Victor", EpicKey: "EPIC-1"}
 	if got != want {
 		t.Errorf("parseIssue() = %+v, want %+v", got, want)
 	}
@@ -90,7 +92,7 @@ func TestParseIssue_NoAssignee(t *testing.T) {
 		Key: "PROJ-2",
 		Fields: rawIssueFlds{
 			Summary:   "Unassigned",
-			Status:    rawNamedField{Name: "To Do"},
+			Status:    rawStatusField{Name: "To Do"},
 			IssueType: rawNamedField{Name: "Story"},
 		},
 	}

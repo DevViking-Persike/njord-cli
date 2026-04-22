@@ -131,7 +131,7 @@ type rawIssue struct {
 
 type rawIssueFlds struct {
 	Summary   string          `json:"summary"`
-	Status    rawNamedField   `json:"status"`
+	Status    rawStatusField  `json:"status"`
 	IssueType rawNamedField   `json:"issuetype"`
 	Assignee  *rawAssigneeFld `json:"assignee"`
 	Parent    *rawParent      `json:"parent"`
@@ -140,6 +140,13 @@ type rawIssueFlds struct {
 
 type rawNamedField struct {
 	Name string `json:"name"`
+}
+
+type rawStatusField struct {
+	Name     string `json:"name"`
+	Category struct {
+		Key string `json:"key"`
+	} `json:"statusCategory"`
 }
 
 type rawAssigneeFld struct {
@@ -158,10 +165,11 @@ type rawParentFlds struct {
 
 func parseIssue(r rawIssue) Issue {
 	issue := Issue{
-		Key:     r.Key,
-		Summary: r.Fields.Summary,
-		Status:  r.Fields.Status.Name,
-		Type:    r.Fields.IssueType.Name,
+		Key:            r.Key,
+		Summary:        r.Fields.Summary,
+		Status:         r.Fields.Status.Name,
+		StatusCategory: r.Fields.Status.Category.Key,
+		Type:           r.Fields.IssueType.Name,
 	}
 	if r.Fields.Assignee != nil {
 		issue.Assignee = r.Fields.Assignee.DisplayName

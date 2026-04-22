@@ -76,6 +76,36 @@ func (s *JiraService) ListProjectBacklog(projectKey string) ([]jiraclient.Issue,
 	return res.Issues, nil
 }
 
+// ListMyProjectIssues returns all issues (any status) assigned to the current
+// user in a project. "Meu histórico" — inclui concluídas para consulta.
+func (s *JiraService) ListMyProjectIssues(projectKey string) ([]jiraclient.Issue, error) {
+	if projectKey == "" {
+		return nil, fmt.Errorf("listing my project issues: projectKey is required")
+	}
+	jql := fmt.Sprintf(`project = %q AND assignee = currentUser() ORDER BY status ASC, updated DESC`, projectKey)
+	res, err := s.gw.SearchIssues(jql)
+	if err != nil {
+		return nil, fmt.Errorf("listing my project issues: %w", err)
+	}
+	return res.Issues, nil
+}
+
+// FilterByStatusCategory keeps only issues whose StatusCategory matches the
+// given Jira category key ("new", "indeterminate", "done"). Empty category
+// returns the input unchanged.
+func FilterByStatusCategory(issues []jiraclient.Issue, category string) []jiraclient.Issue {
+	if category == "" {
+		return issues
+	}
+	out := make([]jiraclient.Issue, 0, len(issues))
+	for _, iss := range issues {
+		if iss.StatusCategory == category {
+			out = append(out, iss)
+		}
+	}
+	return out
+}
+
 // FilterIssues returns the subset of issues whose Key or Summary contains the
 // query (case-insensitive). Empty query returns the full slice unchanged.
 func FilterIssues(issues []jiraclient.Issue, query string) []jiraclient.Issue {

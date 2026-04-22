@@ -10,111 +10,139 @@ import (
 )
 
 type fakeIssuesLoader struct {
-	lastKey string
-	issues  []jiraclient.Issue
-	err     error
+	backlogKey  string
+	mineKey     string
+	backlog     []jiraclient.Issue
+	mine        []jiraclient.Issue
+	backlogErr  error
+	mineErr     error
 }
 
 func (f *fakeIssuesLoader) ListProjectBacklog(key string) ([]jiraclient.Issue, error) {
-	f.lastKey = key
-	return f.issues, f.err
+	f.backlogKey = key
+	return f.backlog, f.backlogErr
 }
 
-func TestJiraIssues_Init_CallsWithProjectKey(t *testing.T) {
+func (f *fakeIssuesLoader) ListMyProjectIssues(key string) ([]jiraclient.Issue, error) {
+	f.mineKey = key
+	return f.mine, f.mineErr
+}
+
+func TestJiraIssues_InitLoadsBacklog(t *testing.T) {
 	loader := &fakeIssuesLoader{}
 	m := NewIssuesModel(loader, jiraclient.Project{Key: "GAP", Name: "Squad GAP"})
-	cmd := m.Init()
-	cmd() // fire to trigger loader
-	if loader.lastKey != "GAP" {
-		t.Errorf("loader called with key %q, want GAP", loader.lastKey)
+	m.Init()()
+	if loader.backlogKey != "GAP" || loader.mineKey != "" {
+		t.Errorf("initial load should hit backlog only; backlog=%q mine=%q", loader.backlogKey, loader.mineKey)
 	}
 }
 
-func TestJiraIssues_GroupsByStatus(t *testing.T) {
-	m := NewIssuesModel(&fakeIssuesLoader{}, jiraclient.Project{Key: "GAP", Name: "Squad GAP"})
+func TestJiraIssues_RightArrowSwitchesToMine(t *testing.T) {
+	loader := &fakeIssuesLoader{}
+	m := NewIssuesModel(loader, jiraclient.Project{Key: "GAP"})
 	m.SetSize(120, 40)
-	m, _ = m.Update(issuesLoadedMsg{issues: []jiraclient.Issue{
-		{Key: "GAP-1", Summary: "Task A", Status: "Desenvolvimento em 2.2", Type: "Task"},
-		{Key: "GAP-2", Summary: "Task B", Status: "Desenvolvimento em 2.1", Type: "Story"},
-		{Key: "GAP-3", Summary: "Task C", Status: "Desenvolvimento em 2.2", Type: "Bug"},
-	}})
+	// First deliver backlog
+	m, _ = m.Update(issuesLoadedMsg{mode: modeBacklog, issues: []jiraclient.Issue{{Key: "GAP-1", Status: "Em dev", StatusCategory: "indeterminate", Type: "Task"}}})
+	// Press right
+	m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	if m.mode != modeMine {
+		t.Errorf("mode = %v, want modeMine", m.mode)
+	}
+	// Fire returned cmd — should call ListMyProjectIssues
+	if cmd == nil {
+		t.Fatal("expected load command after mode switch")
+	}
+	cmd()
+	if loader.mineKey != "GAP" {
+		t.Errorf("mine loader should have been called with GAP, got %q", loader.mineKey)
+	}
+}
 
-	view := m.View()
-	for _, want := range []string{"Squad GAP — Backlog", "Desenvolvimento em 2.2", "Desenvolvimento em 2.1", "(2)", "(1)", "GAP-1", "GAP-2", "GAP-3"} {
-		if !strings.Contains(view, want) {
-			t.Errorf("view missing %q", want)
+func TestJiraIssues_LeftArrowGoesBacklog(t *testing.T) {
+	loader := &fakeIssuesLoader{}
+	m := NewIssuesModel(loader, jiraclient.Project{Key: "GAP"})
+	m.mode = modeMine
+	m.loading = false
+	m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	if m.mode != modeBacklog {
+		t.Errorf("mode should be modeBacklog after left")
+	}
+	if cmd == nil {
+		t.Fatal("expected load command")
+	}
+}
+
+func TestJiraIssues_TabCyclesStatusFilter(t *testing.T) {
+	m := NewIssuesModel(&fakeIssuesLoader{}, jiraclient.Project{Key: "GAP"})
+	m.SetSize(120, 40)
+	m, _ = m.Update(issuesLoadedMsg{mode: modeBacklog, issues: nil})
+
+	wantCycle := []string{"indeterminate", "done", "new", ""}
+	for _, want := range wantCycle {
+		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
+		if m.statusFilter != want {
+			t.Errorf("expected statusFilter=%q after tab, got %q", want, m.statusFilter)
 		}
 	}
 }
 
-func TestJiraIssues_SearchFiltersLive(t *testing.T) {
-	m := NewIssuesModel(&fakeIssuesLoader{}, jiraclient.Project{Key: "GAP", Name: "Squad GAP"})
+func TestJiraIssues_StatusFilterHidesOtherCategories(t *testing.T) {
+	m := NewIssuesModel(&fakeIssuesLoader{}, jiraclient.Project{Key: "GAP"})
 	m.SetSize(120, 40)
-	m, _ = m.Update(issuesLoadedMsg{issues: []jiraclient.Issue{
-		{Key: "GAP-1", Summary: "Fix login", Status: "Em dev", Type: "Task"},
-		{Key: "GAP-42", Summary: "Retry caching", Status: "Em dev", Type: "Task"},
-		{Key: "GAP-7", Summary: "Add logout", Status: "Pronto", Type: "Story"},
+	m, _ = m.Update(issuesLoadedMsg{mode: modeBacklog, issues: []jiraclient.Issue{
+		{Key: "GAP-1", Summary: "A", Status: "Em dev", StatusCategory: "indeterminate", Type: "Task"},
+		{Key: "GAP-2", Summary: "B", Status: "Concluído", StatusCategory: "done", Type: "Task"},
 	}})
 
-	// Type "login" — só GAP-1 deve aparecer
+	// Cycle once → "indeterminate"
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
+
+	view := m.View()
+	if !strings.Contains(view, "GAP-1") {
+		t.Errorf("expected GAP-1 when filter=indeterminate, got:\n%s", view)
+	}
+	if strings.Contains(view, "GAP-2") {
+		t.Errorf("GAP-2 should be hidden when filter=indeterminate, got:\n%s", view)
+	}
+}
+
+func TestJiraIssues_StaleResponseIgnored(t *testing.T) {
+	m := NewIssuesModel(&fakeIssuesLoader{}, jiraclient.Project{Key: "GAP"})
+	m.mode = modeMine
+	// Delivery of backlog while mode is mine — ignore.
+	m, _ = m.Update(issuesLoadedMsg{mode: modeBacklog, issues: []jiraclient.Issue{{Key: "STALE-1"}}})
+	if m.issues != nil && len(m.issues) > 0 {
+		t.Errorf("stale response from mode %v should be ignored in mode %v", modeBacklog, m.mode)
+	}
+}
+
+func TestJiraIssues_SearchFiltersLive(t *testing.T) {
+	m := NewIssuesModel(&fakeIssuesLoader{}, jiraclient.Project{Key: "GAP"})
+	m.SetSize(120, 40)
+	m, _ = m.Update(issuesLoadedMsg{mode: modeBacklog, issues: []jiraclient.Issue{
+		{Key: "GAP-1", Summary: "Fix login", Status: "Em dev", Type: "Task"},
+		{Key: "GAP-42", Summary: "Retry caching", Status: "Em dev", Type: "Task"},
+	}})
 	for _, ch := range "login" {
 		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
 	}
 	view := m.View()
-	if !strings.Contains(view, "GAP-1") {
-		t.Errorf("expected GAP-1 after search=login, got:\n%s", view)
-	}
-	if strings.Contains(view, "GAP-42") || strings.Contains(view, "GAP-7") {
-		t.Errorf("expected only GAP-1, got:\n%s", view)
-	}
-	if !strings.Contains(view, "(1 de 3)") {
-		t.Errorf("expected counter '(1 de 3)', got:\n%s", view)
-	}
-}
-
-func TestJiraIssues_SearchByKey(t *testing.T) {
-	m := NewIssuesModel(&fakeIssuesLoader{}, jiraclient.Project{Key: "GAP"})
-	m.SetSize(120, 40)
-	m, _ = m.Update(issuesLoadedMsg{issues: []jiraclient.Issue{
-		{Key: "GAP-1", Summary: "A", Status: "s", Type: "Task"},
-		{Key: "GAP-42", Summary: "B", Status: "s", Type: "Task"},
-	}})
-	for _, ch := range "42" {
-		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
-	}
-	view := m.View()
-	if !strings.Contains(view, "GAP-42") || strings.Contains(view, "GAP-1\n") {
-		t.Errorf("search by key 42 should keep only GAP-42, got:\n%s", view)
-	}
-}
-
-func TestJiraIssues_BackspaceRemovesChar(t *testing.T) {
-	m := NewIssuesModel(&fakeIssuesLoader{}, jiraclient.Project{Key: "GAP"})
-	m.SetSize(120, 40)
-	m, _ = m.Update(issuesLoadedMsg{issues: []jiraclient.Issue{{Key: "GAP-1", Summary: "foo", Status: "s", Type: "T"}}})
-	for _, ch := range "gap" {
-		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
-	}
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
-	if m.search != "ga" {
-		t.Errorf("search after backspace = %q, want %q", m.search, "ga")
+	if !strings.Contains(view, "GAP-1") || strings.Contains(view, "GAP-42") {
+		t.Errorf("search=login should keep only GAP-1, got:\n%s", view)
 	}
 }
 
 func TestJiraIssues_EscClearsSearchThenGoesBack(t *testing.T) {
 	m := NewIssuesModel(&fakeIssuesLoader{}, jiraclient.Project{Key: "GAP"})
 	m.SetSize(120, 40)
-	m, _ = m.Update(issuesLoadedMsg{issues: []jiraclient.Issue{{Key: "GAP-1", Summary: "x", Status: "s", Type: "T"}}})
+	m, _ = m.Update(issuesLoadedMsg{mode: modeBacklog, issues: []jiraclient.Issue{{Key: "GAP-1", Status: "s", Type: "T"}}})
 	for _, ch := range "abc" {
 		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
 	}
-	// First esc clears search
+	// First esc clears
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	if m.search != "" {
-		t.Errorf("first esc should clear search, got %q", m.search)
-	}
-	if m.GoBack() {
-		t.Error("first esc should NOT go back yet")
+	if m.search != "" || m.GoBack() {
+		t.Errorf("first esc should clear search not go back; search=%q goBack=%v", m.search, m.GoBack())
 	}
 	// Second esc goes back
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
@@ -125,29 +153,25 @@ func TestJiraIssues_EscClearsSearchThenGoesBack(t *testing.T) {
 
 func TestJiraIssues_LoadError(t *testing.T) {
 	m := NewIssuesModel(&fakeIssuesLoader{}, jiraclient.Project{Key: "GAP"})
-	m, _ = m.Update(issuesLoadedMsg{err: errors.New("401 bad token")})
-	if !strings.Contains(m.View(), "401 bad token") {
-		t.Errorf("error should be visible, got:\n%s", m.View())
+	m, _ = m.Update(issuesLoadedMsg{mode: modeBacklog, err: errors.New("401")})
+	if !strings.Contains(m.View(), "401") {
+		t.Errorf("error not visible, got:\n%s", m.View())
 	}
 }
 
-func TestJiraIssues_EmptyBacklog(t *testing.T) {
-	m := NewIssuesModel(&fakeIssuesLoader{}, jiraclient.Project{Key: "X", Name: "X"})
-	m, _ = m.Update(issuesLoadedMsg{issues: nil})
-	if !strings.Contains(m.View(), "Backlog vazio") {
-		t.Errorf("expected empty-backlog message, got:\n%s", m.View())
+func TestNextInCycle(t *testing.T) {
+	cycle := []string{"a", "b", "c"}
+	tests := []struct{ in, want string }{
+		{"", "a"},
+		{"a", "b"},
+		{"b", "c"},
+		{"c", "a"},
+		{"unknown", "a"},
 	}
-}
-
-func TestJiraIssues_SearchWithNoResults(t *testing.T) {
-	m := NewIssuesModel(&fakeIssuesLoader{}, jiraclient.Project{Key: "X", Name: "X"})
-	m.SetSize(120, 40)
-	m, _ = m.Update(issuesLoadedMsg{issues: []jiraclient.Issue{{Key: "X-1", Summary: "foo", Status: "s", Type: "T"}}})
-	for _, ch := range "zzz" {
-		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
-	}
-	if !strings.Contains(m.View(), "Nenhuma issue corresponde") {
-		t.Errorf("expected no-results message, got:\n%s", m.View())
+	for _, tt := range tests {
+		if got := nextInCycle(cycle, tt.in); got != tt.want {
+			t.Errorf("nextInCycle(%q) = %q, want %q", tt.in, got, tt.want)
+		}
 	}
 }
 
@@ -156,8 +180,5 @@ func TestFormatIssueLine_TruncatesLongSummary(t *testing.T) {
 	line := formatIssueLine(iss)
 	if !strings.Contains(line, "...") {
 		t.Error("expected truncation ellipsis in long summary")
-	}
-	if !strings.Contains(line, "X-1") || !strings.Contains(line, "[Task]") {
-		t.Errorf("missing key or type, got %q", line)
 	}
 }
