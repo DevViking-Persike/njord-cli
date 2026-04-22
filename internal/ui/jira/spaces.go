@@ -1,4 +1,4 @@
-package ui
+package jira
 
 import (
 	"fmt"
@@ -11,21 +11,21 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// jiraSpacesLoadedMsg carries the async result of listing Jira projects.
-type jiraSpacesLoadedMsg struct {
+// spacesLoadedMsg carries the async result of listing Jira projects.
+type spacesLoadedMsg struct {
 	projects []jiraclient.Project
 	err      error
 }
 
-// JiraSpacesLoader is the minimum surface for loading Jira spaces.
+// SpacesLoader is the minimum surface for loading Jira spaces.
 // Kept as an interface so the UI never depends directly on internal/app.
-type JiraSpacesLoader interface {
+type SpacesLoader interface {
 	ListSpaces() ([]jiraclient.Project, error)
 }
 
-// JiraSpacesModel renders a grid of Jira projects (espaços).
-type JiraSpacesModel struct {
-	loader    JiraSpacesLoader
+// SpacesModel renders a grid of Jira projects (espaços).
+type SpacesModel struct {
+	loader    SpacesLoader
 	projects  []jiraclient.Project
 	loading   bool
 	loadErr   string
@@ -39,8 +39,8 @@ type JiraSpacesModel struct {
 	goBack    bool
 }
 
-func NewJiraSpacesModel(loader JiraSpacesLoader) JiraSpacesModel {
-	return JiraSpacesModel{
+func NewSpacesModel(loader SpacesLoader) SpacesModel {
+	return SpacesModel{
 		loader:    loader,
 		loading:   true,
 		cols:      2,
@@ -48,17 +48,17 @@ func NewJiraSpacesModel(loader JiraSpacesLoader) JiraSpacesModel {
 	}
 }
 
-func (m JiraSpacesModel) Init() tea.Cmd {
+func (m SpacesModel) Init() tea.Cmd {
 	loader := m.loader
 	return func() tea.Msg {
 		projects, err := loader.ListSpaces()
-		return jiraSpacesLoadedMsg{projects: projects, err: err}
+		return spacesLoadedMsg{projects: projects, err: err}
 	}
 }
 
-func (m JiraSpacesModel) Update(msg tea.Msg) (JiraSpacesModel, tea.Cmd) {
+func (m SpacesModel) Update(msg tea.Msg) (SpacesModel, tea.Cmd) {
 	switch msg := msg.(type) {
-	case jiraSpacesLoadedMsg:
+	case spacesLoadedMsg:
 		m.loading = false
 		if msg.err != nil {
 			m.loadErr = msg.err.Error()
@@ -79,7 +79,7 @@ func (m JiraSpacesModel) Update(msg tea.Msg) (JiraSpacesModel, tea.Cmd) {
 	return m, nil
 }
 
-func (m JiraSpacesModel) handleKey(msg tea.KeyMsg) (JiraSpacesModel, tea.Cmd) {
+func (m SpacesModel) handleKey(msg tea.KeyMsg) (SpacesModel, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
 		if m.cursor >= m.cols {
@@ -110,7 +110,7 @@ func (m JiraSpacesModel) handleKey(msg tea.KeyMsg) (JiraSpacesModel, tea.Cmd) {
 	return m, nil
 }
 
-func (m JiraSpacesModel) View() string {
+func (m SpacesModel) View() string {
 	var b strings.Builder
 
 	b.WriteString(shared.NjordTitle() + "\n\n")
@@ -143,7 +143,7 @@ func (m JiraSpacesModel) View() string {
 	return b.String()
 }
 
-func (m JiraSpacesModel) renderGrid() string {
+func (m SpacesModel) renderGrid() string {
 	var rowBuf strings.Builder
 	rows := (len(m.projects) + m.cols - 1) / m.cols
 	visible := m.visibleRows()
@@ -169,7 +169,7 @@ func (m JiraSpacesModel) renderGrid() string {
 
 // visibleRows returns how many card rows fit in the viewport after the
 // njord title, section header, divider, scroll indicator and app-level help.
-func (m JiraSpacesModel) visibleRows() int {
+func (m SpacesModel) visibleRows() int {
 	const cardHeight = 4
 	// Vertical chrome: njord title (2) + section+divider (3) + help (2) + slack (1)
 	const chromeHeight = 8
@@ -180,7 +180,7 @@ func (m JiraSpacesModel) visibleRows() int {
 	return available / cardHeight
 }
 
-func (m *JiraSpacesModel) ensureVisible() {
+func (m *SpacesModel) ensureVisible() {
 	row := m.cursor / m.cols
 	visible := m.visibleRows()
 	if row < m.offset {
@@ -191,7 +191,7 @@ func (m *JiraSpacesModel) ensureVisible() {
 	}
 }
 
-func (m JiraSpacesModel) renderCard(p jiraclient.Project, selected bool) string {
+func (m SpacesModel) renderCard(p jiraclient.Project, selected bool) string {
 	cardStyle, titleStyle, subStyle := theme.CardStyle, theme.TitleStyle, theme.SubStyle
 	if selected {
 		cardStyle, titleStyle, subStyle = theme.CardSelectedStyle, theme.TitleSelectedStyle, theme.SubSelectedStyle
@@ -202,7 +202,7 @@ func (m JiraSpacesModel) renderCard(p jiraclient.Project, selected bool) string 
 	return cardStyle.Width(m.cardWidth).Render(content)
 }
 
-func (m *JiraSpacesModel) SetSize(w, h int) {
+func (m *SpacesModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
 	m.recalcLayout()
@@ -212,7 +212,7 @@ func (m *JiraSpacesModel) SetSize(w, h int) {
 	m.ensureVisible()
 }
 
-func (m *JiraSpacesModel) recalcLayout() {
+func (m *SpacesModel) recalcLayout() {
 	if m.width <= 0 {
 		return
 	}
@@ -228,10 +228,10 @@ func (m *JiraSpacesModel) recalcLayout() {
 }
 
 // GoBack reports whether the user pressed esc/q.
-func (m *JiraSpacesModel) GoBack() bool { return m.goBack }
+func (m *SpacesModel) GoBack() bool { return m.goBack }
 
 // Selected returns the project the user picked, or nil.
-func (m *JiraSpacesModel) Selected() *jiraclient.Project { return m.selected }
+func (m *SpacesModel) Selected() *jiraclient.Project { return m.selected }
 
 // ClearSelection clears the picked project.
-func (m *JiraSpacesModel) ClearSelection() { m.selected = nil }
+func (m *SpacesModel) ClearSelection() { m.selected = nil }

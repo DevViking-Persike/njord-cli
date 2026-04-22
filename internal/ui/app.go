@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/DevViking-Persike/njord-cli/internal/app/jira"
+	jiraapp "github.com/DevViking-Persike/njord-cli/internal/app/jira"
+	jiraui "github.com/DevViking-Persike/njord-cli/internal/ui/jira"
 	"github.com/DevViking-Persike/njord-cli/internal/app/project"
 	"github.com/DevViking-Persike/njord-cli/internal/config"
 	"github.com/DevViking-Persike/njord-cli/internal/docker"
@@ -78,8 +79,8 @@ type AppModel struct {
 	settings      SettingsModel
 	gitlabScreen  GitLabModel
 	gitlabActions GitLabActionsModel
-	jiraSpaces    JiraSpacesModel
-	jiraIssues    JiraIssuesModel
+	jiraSpaces    jiraui.SpacesModel
+	jiraIssues    jiraui.IssuesModel
 
 	// GitLab client (lazy init)
 	gitlabClient *gitlabclient.Client
@@ -332,8 +333,8 @@ func (m AppModel) updateGrid(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.jiraClient = client
 			}
-			svc := jira.NewJiraService(m.jiraClient)
-			m.jiraSpaces = NewJiraSpacesModel(svc)
+			svc := jiraapp.NewJiraService(m.jiraClient)
+			m.jiraSpaces = jiraui.NewSpacesModel(svc)
 			m.jiraSpaces.SetSize(m.width, m.height)
 			m.screen = ScreenJiraSpaces
 			return m, m.jiraSpaces.Init()
@@ -353,8 +354,8 @@ func (m AppModel) updateJiraSpaces(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if sel := m.jiraSpaces.Selected(); sel != nil {
 		m.jiraSpaces.ClearSelection()
-		svc := jira.NewJiraService(m.jiraClient)
-		m.jiraIssues = NewJiraIssuesModel(svc, *sel)
+		svc := jiraapp.NewJiraService(m.jiraClient)
+		m.jiraIssues = jiraui.NewIssuesModel(svc, *sel)
 		m.jiraIssues.SetSize(m.width, m.height)
 		m.screen = ScreenJiraIssues
 		return m, m.jiraIssues.Init()

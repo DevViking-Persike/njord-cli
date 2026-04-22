@@ -1,4 +1,4 @@
-package ui
+package jira
 
 import (
 	"errors"
@@ -22,7 +22,7 @@ func (f *fakeIssuesLoader) ListMyIssuesInProject(key string) ([]jiraclient.Issue
 
 func TestJiraIssues_Init_CallsWithProjectKey(t *testing.T) {
 	loader := &fakeIssuesLoader{}
-	m := NewJiraIssuesModel(loader, jiraclient.Project{Key: "GAP", Name: "Squad GAP"})
+	m := NewIssuesModel(loader, jiraclient.Project{Key: "GAP", Name: "Squad GAP"})
 	cmd := m.Init()
 	cmd() // fire to trigger loader
 	if loader.lastKey != "GAP" {
@@ -31,9 +31,9 @@ func TestJiraIssues_Init_CallsWithProjectKey(t *testing.T) {
 }
 
 func TestJiraIssues_GroupsByStatus(t *testing.T) {
-	m := NewJiraIssuesModel(&fakeIssuesLoader{}, jiraclient.Project{Key: "GAP", Name: "Squad GAP"})
+	m := NewIssuesModel(&fakeIssuesLoader{}, jiraclient.Project{Key: "GAP", Name: "Squad GAP"})
 	m.SetSize(120, 40)
-	m, _ = m.Update(jiraIssuesLoadedMsg{issues: []jiraclient.Issue{
+	m, _ = m.Update(issuesLoadedMsg{issues: []jiraclient.Issue{
 		{Key: "GAP-1", Summary: "Task A", Status: "Desenvolvimento em 2.2", Type: "Task"},
 		{Key: "GAP-2", Summary: "Task B", Status: "Desenvolvimento em 2.1", Type: "Story"},
 		{Key: "GAP-3", Summary: "Task C", Status: "Desenvolvimento em 2.2", Type: "Bug"},
@@ -48,23 +48,23 @@ func TestJiraIssues_GroupsByStatus(t *testing.T) {
 }
 
 func TestJiraIssues_LoadError(t *testing.T) {
-	m := NewJiraIssuesModel(&fakeIssuesLoader{}, jiraclient.Project{Key: "GAP"})
-	m, _ = m.Update(jiraIssuesLoadedMsg{err: errors.New("401 bad token")})
+	m := NewIssuesModel(&fakeIssuesLoader{}, jiraclient.Project{Key: "GAP"})
+	m, _ = m.Update(issuesLoadedMsg{err: errors.New("401 bad token")})
 	if !strings.Contains(m.View(), "401 bad token") {
 		t.Errorf("error should be visible, got:\n%s", m.View())
 	}
 }
 
 func TestJiraIssues_EmptyState(t *testing.T) {
-	m := NewJiraIssuesModel(&fakeIssuesLoader{}, jiraclient.Project{Key: "X", Name: "X"})
-	m, _ = m.Update(jiraIssuesLoadedMsg{issues: nil})
+	m := NewIssuesModel(&fakeIssuesLoader{}, jiraclient.Project{Key: "X", Name: "X"})
+	m, _ = m.Update(issuesLoadedMsg{issues: nil})
 	if !strings.Contains(m.View(), "Nenhuma issue") {
 		t.Errorf("expected empty-state message, got:\n%s", m.View())
 	}
 }
 
 func TestJiraIssues_EscGoesBack(t *testing.T) {
-	m := NewJiraIssuesModel(&fakeIssuesLoader{}, jiraclient.Project{Key: "X"})
+	m := NewIssuesModel(&fakeIssuesLoader{}, jiraclient.Project{Key: "X"})
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	if !m.GoBack() {
 		t.Error("esc should trigger goBack")

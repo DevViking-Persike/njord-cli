@@ -1,4 +1,4 @@
-package ui
+package jira
 
 import (
 	"errors"
@@ -19,20 +19,20 @@ func (f *fakeLoader) ListSpaces() ([]jiraclient.Project, error) {
 }
 
 func TestJiraSpaces_InitShowsLoading(t *testing.T) {
-	m := NewJiraSpacesModel(&fakeLoader{})
+	m := NewSpacesModel(&fakeLoader{})
 	if !strings.Contains(m.View(), "Carregando") {
 		t.Error("expected loading state in initial view")
 	}
 }
 
 func TestJiraSpaces_LoadedShowsProjects(t *testing.T) {
-	m := NewJiraSpacesModel(&fakeLoader{projects: []jiraclient.Project{
+	m := NewSpacesModel(&fakeLoader{projects: []jiraclient.Project{
 		{Key: "GAP", Name: "Squad GAP"},
 		{Key: "BILL", Name: "Squad Billing"},
 	}})
 	m.SetSize(80, 40)
 
-	m, _ = m.Update(jiraSpacesLoadedMsg{projects: []jiraclient.Project{
+	m, _ = m.Update(spacesLoadedMsg{projects: []jiraclient.Project{
 		{Key: "GAP", Name: "Squad GAP"},
 		{Key: "BILL", Name: "Squad Billing"},
 	}})
@@ -44,8 +44,8 @@ func TestJiraSpaces_LoadedShowsProjects(t *testing.T) {
 }
 
 func TestJiraSpaces_LoadError(t *testing.T) {
-	m := NewJiraSpacesModel(&fakeLoader{err: errors.New("401 unauthorized")})
-	m, _ = m.Update(jiraSpacesLoadedMsg{err: errors.New("401 unauthorized")})
+	m := NewSpacesModel(&fakeLoader{err: errors.New("401 unauthorized")})
+	m, _ = m.Update(spacesLoadedMsg{err: errors.New("401 unauthorized")})
 
 	view := m.View()
 	if !strings.Contains(view, "401 unauthorized") {
@@ -54,8 +54,8 @@ func TestJiraSpaces_LoadError(t *testing.T) {
 }
 
 func TestJiraSpaces_EscTriggersGoBack(t *testing.T) {
-	m := NewJiraSpacesModel(&fakeLoader{})
-	m, _ = m.Update(jiraSpacesLoadedMsg{projects: nil})
+	m := NewSpacesModel(&fakeLoader{})
+	m, _ = m.Update(spacesLoadedMsg{projects: nil})
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	if !m.GoBack() {
 		t.Error("esc should trigger goBack")
@@ -63,9 +63,9 @@ func TestJiraSpaces_EscTriggersGoBack(t *testing.T) {
 }
 
 func TestJiraSpaces_EnterSelectsProject(t *testing.T) {
-	m := NewJiraSpacesModel(&fakeLoader{})
+	m := NewSpacesModel(&fakeLoader{})
 	m.SetSize(80, 40)
-	m, _ = m.Update(jiraSpacesLoadedMsg{projects: []jiraclient.Project{
+	m, _ = m.Update(spacesLoadedMsg{projects: []jiraclient.Project{
 		{Key: "GAP", Name: "Squad GAP"},
 	}})
 
@@ -83,8 +83,8 @@ func TestJiraSpaces_EnterSelectsProject(t *testing.T) {
 }
 
 func TestJiraSpaces_EmptyList(t *testing.T) {
-	m := NewJiraSpacesModel(&fakeLoader{})
-	m, _ = m.Update(jiraSpacesLoadedMsg{projects: nil})
+	m := NewSpacesModel(&fakeLoader{})
+	m, _ = m.Update(spacesLoadedMsg{projects: nil})
 	if !strings.Contains(m.View(), "Nenhum projeto encontrado") {
 		t.Errorf("expected empty-state message, got:\n%s", m.View())
 	}

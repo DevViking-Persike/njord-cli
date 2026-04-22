@@ -1,4 +1,4 @@
-package ui
+package jira
 
 import (
 	"fmt"
@@ -12,19 +12,19 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-type jiraIssuesLoadedMsg struct {
+type issuesLoadedMsg struct {
 	issues []jiraclient.Issue
 	err    error
 }
 
-// JiraIssuesLoader loads issues assigned to the user in a specific project.
-type JiraIssuesLoader interface {
+// IssuesLoader loads issues assigned to the user in a specific project.
+type IssuesLoader interface {
 	ListMyIssuesInProject(projectKey string) ([]jiraclient.Issue, error)
 }
 
-// JiraIssuesModel shows the user's issues in a project, grouped by status.
-type JiraIssuesModel struct {
-	loader       JiraIssuesLoader
+// IssuesModel shows the user's issues in a project, grouped by status.
+type IssuesModel struct {
+	loader       IssuesLoader
 	projectKey   string
 	projectName  string
 	issues       []jiraclient.Issue
@@ -38,8 +38,8 @@ type JiraIssuesModel struct {
 	goBack       bool
 }
 
-func NewJiraIssuesModel(loader JiraIssuesLoader, project jiraclient.Project) JiraIssuesModel {
-	return JiraIssuesModel{
+func NewIssuesModel(loader IssuesLoader, project jiraclient.Project) IssuesModel {
+	return IssuesModel{
 		loader:      loader,
 		projectKey:  project.Key,
 		projectName: project.Name,
@@ -47,18 +47,18 @@ func NewJiraIssuesModel(loader JiraIssuesLoader, project jiraclient.Project) Jir
 	}
 }
 
-func (m JiraIssuesModel) Init() tea.Cmd {
+func (m IssuesModel) Init() tea.Cmd {
 	loader := m.loader
 	key := m.projectKey
 	return func() tea.Msg {
 		issues, err := loader.ListMyIssuesInProject(key)
-		return jiraIssuesLoadedMsg{issues: issues, err: err}
+		return issuesLoadedMsg{issues: issues, err: err}
 	}
 }
 
-func (m JiraIssuesModel) Update(msg tea.Msg) (JiraIssuesModel, tea.Cmd) {
+func (m IssuesModel) Update(msg tea.Msg) (IssuesModel, tea.Cmd) {
 	switch msg := msg.(type) {
-	case jiraIssuesLoadedMsg:
+	case issuesLoadedMsg:
 		m.loading = false
 		if msg.err != nil {
 			m.loadErr = msg.err.Error()
@@ -95,7 +95,7 @@ func (m JiraIssuesModel) Update(msg tea.Msg) (JiraIssuesModel, tea.Cmd) {
 	return m, nil
 }
 
-func (m JiraIssuesModel) View() string {
+func (m IssuesModel) View() string {
 	var b strings.Builder
 
 	b.WriteString(shared.NjordTitle() + "\n\n")
@@ -135,7 +135,7 @@ func (m JiraIssuesModel) View() string {
 
 // buildLines produces one line per issue and per status header, in display
 // order. Kept separate so scroll logic only tracks line indexes.
-func (m JiraIssuesModel) buildLines() []string {
+func (m IssuesModel) buildLines() []string {
 	var lines []string
 	countStyle := theme.DimStyle
 	statusStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.JiraBlueSel)
@@ -167,7 +167,7 @@ func formatIssueLine(iss jiraclient.Issue) string {
 	)
 }
 
-func (m JiraIssuesModel) visibleLines() int {
+func (m IssuesModel) visibleLines() int {
 	const chromeHeight = 8 // title + header + divider + help + padding
 	v := m.height - chromeHeight
 	if v < 3 {
@@ -176,7 +176,7 @@ func (m JiraIssuesModel) visibleLines() int {
 	return v
 }
 
-func (m JiraIssuesModel) maxOffset() int {
+func (m IssuesModel) maxOffset() int {
 	max := len(m.buildLines()) - m.visibleLines()
 	if max < 0 {
 		return 0
@@ -184,7 +184,7 @@ func (m JiraIssuesModel) maxOffset() int {
 	return max
 }
 
-func (m *JiraIssuesModel) SetSize(w, h int) {
+func (m *IssuesModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
 	if max := m.maxOffset(); m.offset > max {
@@ -192,4 +192,4 @@ func (m *JiraIssuesModel) SetSize(w, h int) {
 	}
 }
 
-func (m *JiraIssuesModel) GoBack() bool { return m.goBack }
+func (m *IssuesModel) GoBack() bool { return m.goBack }
