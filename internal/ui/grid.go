@@ -194,9 +194,7 @@ func (m GridModel) View() string {
 	var b strings.Builder
 
 	// Header: [Aprovações recentes] [MRs pendentes] ᚾ N J O R D
-	runeStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#ff9800"))
-	nameStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#daa520"))
-	title := "  " + runeStyle.Render("ᚾ") + " " + nameStyle.Render("N J O R D")
+	title := njordTitle()
 
 	hasData := len(m.recentPushes) > 0 || len(m.pendingMRs) > 0 || m.pushError != "" || m.mrsError != ""
 

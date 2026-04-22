@@ -109,9 +109,10 @@ func (m JiraSpacesModel) handleKey(msg tea.KeyMsg) (JiraSpacesModel, tea.Cmd) {
 func (m JiraSpacesModel) View() string {
 	var b strings.Builder
 
-	header := lipgloss.NewStyle().Bold(true).Foreground(theme.Title).Render("  Jira — Espaços")
+	b.WriteString(njordTitle() + "\n\n")
+	section := lipgloss.NewStyle().Bold(true).Foreground(theme.JiraBlue).Render("  Jira — Espaços")
 	divider := theme.DimStyle.Render("  " + strings.Repeat("─", 50))
-	b.WriteString("\n" + header + "\n" + divider + "\n\n")
+	b.WriteString(section + "\n" + divider + "\n\n")
 
 	if m.loading {
 		b.WriteString(theme.DimStyle.Render("  Carregando projetos do Jira..."))

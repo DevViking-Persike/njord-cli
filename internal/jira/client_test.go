@@ -212,15 +212,19 @@ func TestSearchIssues_HTTPError(t *testing.T) {
 	}
 }
 
-func TestListProjects_SinglePage(t *testing.T) {
+func TestListProjects_ReturnsRecent(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("startAt") != "0" {
-			t.Errorf("startAt = %q, want 0", r.URL.Query().Get("startAt"))
+		if r.URL.Path != "/rest/api/3/project/recent" {
+			t.Errorf("path = %q, want /rest/api/3/project/recent", r.URL.Path)
 		}
-		fmt.Fprint(w, `{"isLast": true, "values": [
+		if r.URL.Query().Get("maxResults") != "50" {
+			t.Errorf("maxResults = %q, want 50", r.URL.Query().Get("maxResults"))
+		}
+		fmt.Fprint(w, `[
 			{"id":"1","key":"GAP","name":"Squad GAP"},
-			{"id":"2","key":"BILL","name":"Squad Billing"}
-		]}`)
+			{"id":"2","key":"BILL","name":"Squad Billing"},
+			{"id":"3","key":"SPAVT","name":"Suporte Tecnologia"}
+		]`)
 	}))
 	defer srv.Close()
 
@@ -229,23 +233,17 @@ func TestListProjects_SinglePage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(projects) != 2 {
-		t.Fatalf("len = %d, want 2", len(projects))
+	if len(projects) != 3 {
+		t.Fatalf("len = %d, want 3", len(projects))
 	}
-	if projects[0].Key != "GAP" || projects[1].Name != "Squad Billing" {
+	if projects[0].Key != "GAP" || projects[2].Name != "Suporte Tecnologia" {
 		t.Errorf("projects = %+v", projects)
 	}
 }
 
-func TestListProjects_Paginates(t *testing.T) {
-	var calls int
+func TestListProjects_EmptyResponse(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls++
-		if calls == 1 {
-			fmt.Fprint(w, `{"isLast": false, "values": [{"id":"1","key":"A","name":"A"}]}`)
-			return
-		}
-		fmt.Fprint(w, `{"isLast": true, "values": [{"id":"2","key":"B","name":"B"}]}`)
+		fmt.Fprint(w, `[]`)
 	}))
 	defer srv.Close()
 
@@ -254,11 +252,8 @@ func TestListProjects_Paginates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if calls != 2 {
-		t.Errorf("expected 2 API calls, got %d", calls)
-	}
-	if len(projects) != 2 {
-		t.Errorf("len = %d, want 2", len(projects))
+	if len(projects) != 0 {
+		t.Errorf("expected empty slice, got %d items", len(projects))
 	}
 }
 
