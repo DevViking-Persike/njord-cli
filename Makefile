@@ -1,11 +1,18 @@
-.PHONY: build test test-unit test-verbose coverage coverage-html mutation mutation-docker mutation-app clean
+.PHONY: build install test test-unit test-verbose coverage coverage-html mutation mutation-docker mutation-app clean
 
 BINARY := njord
+INSTALL_PATH := $(HOME)/.local/bin/njord-cli
 PKG := ./...
 MUTATION_PKGS := ./internal/app/ ./internal/docker/ ./internal/config/ ./internal/jira/
 
 build:
 	go build -o $(BINARY) ./cmd/njord/
+
+# install: compila e copia para ~/.local/bin/njord-cli
+# (caminho que a função njord do shell invoca)
+install: build
+	cp $(BINARY) $(INSTALL_PATH)
+	@echo "→ instalado em $(INSTALL_PATH)"
 
 # test: roda unit tests + mutation testing (threshold 84%)
 # Se a eficácia cair abaixo de 84%, bloqueia (exit != 0).

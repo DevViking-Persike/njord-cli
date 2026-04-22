@@ -6,9 +6,11 @@ TUI em Go para gerenciar projetos, GitLab e Docker.
 
 ```bash
 export PATH="$HOME/go/bin:/usr/local/go/bin:$PATH"
-go build ./cmd/njord/
-./njord
+make install   # compila e instala em ~/.local/bin/njord-cli
+njord          # no shell: chama a função que invoca o binário instalado
 ```
+
+Detalhe importante: o comando `njord` é uma função do shell que roda `~/.local/bin/njord-cli`, não `./njord` do repo. Ver `.claude/rules/07-install-binary.md`.
 
 ## Estrutura
 
@@ -55,6 +57,7 @@ Resumo:
 4. **Clean Architecture** — `app` (negócio) → gateways → `ui` → `cmd`
 5. **Simplicidade** — sem abstração prematura, sem flags booleanas
 6. **Refatoração contínua** — teste antes de mexer, commit separado do bugfix
+7. **Deploy** — `make install` depois de qualquer mudança testável via `njord`
 
 Skills: `/check-rules` (audita), `/refactor <arquivo>` (refatora guiado).
 

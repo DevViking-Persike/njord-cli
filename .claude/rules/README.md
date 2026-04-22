@@ -10,6 +10,7 @@ Cada arquivo aqui define uma regra. Skills (`.claude/commands/`) referenciam reg
 | 4 | [Clean Architecture](04-clean-architecture.md) | sim (grep de imports) |
 | 5 | [Simplicidade](05-simplicity.md) | não (code review) |
 | 6 | [Refatoração contínua](06-continuous-refactoring.md) | não (disciplina) |
+| 7 | [Deploy do binário para teste](07-install-binary.md) | sim (`make install`) |
 
 ## Comandos
 - `/check-rules` — audita o repo contra todas as regras

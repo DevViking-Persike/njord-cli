@@ -11,6 +11,7 @@ Leia os arquivos de regras antes de começar:
 - `.claude/rules/04-clean-architecture.md`
 - `.claude/rules/05-simplicity.md`
 - `.claude/rules/06-continuous-refactoring.md`
+- `.claude/rules/07-install-binary.md`
 
 ## Checagens
 
