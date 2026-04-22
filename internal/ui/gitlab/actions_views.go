@@ -1,4 +1,4 @@
-package ui
+package gitlab
 
 import (
 	"fmt"
@@ -12,7 +12,7 @@ import (
 
 // --- Merge Requests ---
 
-func (m GitLabActionsModel) viewMRList() string {
+func (m ActionsModel) viewMRList() string {
 	var b strings.Builder
 	if len(m.mrs) == 0 {
 		b.WriteString("  " + theme.DimStyle.Render("Nenhum MR aberto encontrado.") + "\n")
@@ -54,7 +54,7 @@ func (m GitLabActionsModel) viewMRList() string {
 	return b.String()
 }
 
-func (m GitLabActionsModel) handleMRList(msg tea.KeyMsg) (GitLabActionsModel, tea.Cmd) {
+func (m ActionsModel) handleMRList(msg tea.KeyMsg) (ActionsModel, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k", "down", "j":
 		if newCursor, moved := components.ListNav(msg, m.cursor, len(m.mrs)); moved {
@@ -70,7 +70,7 @@ func (m GitLabActionsModel) handleMRList(msg tea.KeyMsg) (GitLabActionsModel, te
 
 // --- Pipelines ---
 
-func (m GitLabActionsModel) viewPipelineList() string {
+func (m ActionsModel) viewPipelineList() string {
 	var b strings.Builder
 	if len(m.pipelines) == 0 {
 		b.WriteString("  " + theme.DimStyle.Render("Nenhuma pipeline encontrada.") + "\n")
@@ -101,7 +101,7 @@ func (m GitLabActionsModel) viewPipelineList() string {
 	return b.String()
 }
 
-func (m GitLabActionsModel) handlePipelineList(msg tea.KeyMsg) (GitLabActionsModel, tea.Cmd) {
+func (m ActionsModel) handlePipelineList(msg tea.KeyMsg) (ActionsModel, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k", "down", "j":
 		if newCursor, moved := components.ListNav(msg, m.cursor, len(m.pipelines)); moved {
@@ -117,7 +117,7 @@ func (m GitLabActionsModel) handlePipelineList(msg tea.KeyMsg) (GitLabActionsMod
 
 // --- Trigger Pipeline ---
 
-func (m GitLabActionsModel) viewTriggerBranch() string {
+func (m ActionsModel) viewTriggerBranch() string {
 	var b strings.Builder
 	if len(m.branches) == 0 {
 		b.WriteString("  " + theme.DimStyle.Render("Carregando branches...") + "\n")
@@ -134,7 +134,7 @@ func (m GitLabActionsModel) viewTriggerBranch() string {
 	return b.String()
 }
 
-func (m GitLabActionsModel) handleTriggerBranch(msg tea.KeyMsg) (GitLabActionsModel, tea.Cmd) {
+func (m ActionsModel) handleTriggerBranch(msg tea.KeyMsg) (ActionsModel, tea.Cmd) {
 	if len(m.branches) == 0 {
 		if msg.String() == "esc" {
 			m.screen = glActionsMenu
@@ -159,7 +159,7 @@ func (m GitLabActionsModel) handleTriggerBranch(msg tea.KeyMsg) (GitLabActionsMo
 	return m, nil
 }
 
-func (m GitLabActionsModel) viewTriggerConfirm() string {
+func (m ActionsModel) viewTriggerConfirm() string {
 	var b strings.Builder
 	b.WriteString("  " + theme.WarningStyle.Render("Disparar pipeline na branch:") + "\n\n")
 	b.WriteString("  " + theme.GitLabTitleStyle.Render(m.branchName) + "\n\n")
@@ -171,7 +171,7 @@ func (m GitLabActionsModel) viewTriggerConfirm() string {
 	return b.String()
 }
 
-func (m GitLabActionsModel) handleTriggerConfirm(msg tea.KeyMsg) (GitLabActionsModel, tea.Cmd) {
+func (m ActionsModel) handleTriggerConfirm(msg tea.KeyMsg) (ActionsModel, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k", "down", "j":
 		if newCursor, moved := components.ListNav(msg, m.cursor, 2); moved {

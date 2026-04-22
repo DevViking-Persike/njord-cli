@@ -1,4 +1,4 @@
-package ui
+package gitlab
 
 import (
 	"fmt"
@@ -50,7 +50,7 @@ type gitlabProjectStatusMsg struct {
 // Tick message for spinner animation
 type gitlabSpinnerTickMsg struct{}
 
-type GitLabModel struct {
+type Model struct {
 	cfg        *config.Config
 	configPath string
 	client     *gitlabclient.Client
@@ -75,8 +75,8 @@ type GitLabModel struct {
 	width, height int
 }
 
-func NewGitLabModel(cfg *config.Config, configPath string, client *gitlabclient.Client) GitLabModel {
-	m := GitLabModel{
+func NewModel(cfg *config.Config, configPath string, client *gitlabclient.Client) Model {
+	m := Model{
 		cfg:            cfg,
 		configPath:     configPath,
 		client:         client,
@@ -89,7 +89,7 @@ func NewGitLabModel(cfg *config.Config, configPath string, client *gitlabclient.
 	return m
 }
 
-func (m *GitLabModel) buildProjectList() {
+func (m *Model) buildProjectList() {
 	m.projects = nil
 	for ci, cat := range m.cfg.Categories {
 		for pi, proj := range cat.Projects {
@@ -103,7 +103,7 @@ func (m *GitLabModel) buildProjectList() {
 	}
 }
 
-func (m GitLabModel) Init() tea.Cmd {
+func (m Model) Init() tea.Cmd {
 	if m.client == nil || len(m.projects) == 0 {
 		return nil
 	}
@@ -119,7 +119,7 @@ func (m GitLabModel) Init() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-func (m GitLabModel) Update(msg tea.Msg) (GitLabModel, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case gitlabProjectStatusMsg:
 		m.pipelineStatus[msg.gitlabPath] = msg.status
@@ -157,7 +157,7 @@ func (m GitLabModel) Update(msg tea.Msg) (GitLabModel, tea.Cmd) {
 	return m, nil
 }
 
-func (m GitLabModel) View() string {
+func (m Model) View() string {
 	var b strings.Builder
 
 	header := theme.GitLabTitleSelectedStyle.Render("  ◆ GitLab")
@@ -234,16 +234,23 @@ func (m GitLabModel) View() string {
 	return b.String()
 }
 
-func (m *GitLabModel) SetSize(w, h int) {
+func (m *Model) SetSize(w, h int) {
 	m.width = w
 	m.height = h
 }
 
-func (m *GitLabModel) GoBack() bool                { return m.goBack }
-func (m *GitLabModel) Selected() *gitlabProjectRef { return m.selected }
-func (m *GitLabModel) ClearSelection()             { m.selected = nil }
+func (m *Model) GoBack() bool                { return m.goBack }
+// Selected returns the config.Project the user picked in the screen, or nil.
+func (m *Model) Selected() *config.Project {
+	if m.selected == nil {
+		return nil
+	}
+	p := m.selected.project
+	return &p
+}
+func (m *Model) ClearSelection()             { m.selected = nil }
 
-func (m GitLabModel) visibleRows() int {
+func (m Model) visibleRows() int {
 	available := m.height - 10
 	if available < 3 {
 		return 3
@@ -251,7 +258,7 @@ func (m GitLabModel) visibleRows() int {
 	return available
 }
 
-func (m *GitLabModel) ensureVisible() {
+func (m *Model) ensureVisible() {
 	visible := m.visibleRows()
 	if m.cursor < m.offset {
 		m.offset = m.cursor
@@ -263,7 +270,7 @@ func (m *GitLabModel) ensureVisible() {
 
 // --- Status icon rendering ---
 
-func (m GitLabModel) renderStatusIcon(gitlabPath string) string {
+func (m Model) renderStatusIcon(gitlabPath string) string {
 	if gitlabPath == "" {
 		return theme.DimStyle.Render("·")
 	}
@@ -290,7 +297,7 @@ func (m GitLabModel) renderStatusIcon(gitlabPath string) string {
 	}
 }
 
-func (m GitLabModel) hasActiveSpinners() bool {
+func (m Model) hasActiveSpinners() bool {
 	// Active if any project still loading or has running/pending pipeline
 	for _, ref := range m.projects {
 		if ref.project.GitLabPath == "" {
@@ -309,7 +316,7 @@ func (m GitLabModel) hasActiveSpinners() bool {
 
 // --- Async commands ---
 
-func (m GitLabModel) fetchProjectStatus(gitlabPath string) tea.Cmd {
+func (m Model) fetchProjectStatus(gitlabPath string) tea.Cmd {
 	client := m.client
 	return func() tea.Msg {
 		msg := gitlabProjectStatusMsg{gitlabPath: gitlabPath}
@@ -322,7 +329,7 @@ func (m GitLabModel) fetchProjectStatus(gitlabPath string) tea.Cmd {
 	}
 }
 
-func (m *GitLabModel) sortByRecent() {
+func (m *Model) sortByRecent() {
 	sort.SliceStable(m.projects, func(i, j int) bool {
 		ti := m.lastActivity[m.projects[i].project.GitLabPath]
 		tj := m.lastActivity[m.projects[j].project.GitLabPath]
@@ -330,7 +337,7 @@ func (m *GitLabModel) sortByRecent() {
 	})
 }
 
-func (m GitLabModel) renderApprovalTag(gitlabPath string) string {
+func (m Model) renderApprovalTag(gitlabPath string) string {
 	a, ok := m.approvalInfo[gitlabPath]
 	if !ok || a == nil {
 		return ""
@@ -346,7 +353,7 @@ func spinnerTick() tea.Cmd {
 
 // --- Key handlers ---
 
-func (m GitLabModel) handleProjectList(msg tea.KeyMsg) (GitLabModel, tea.Cmd) {
+func (m Model) handleProjectList(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
 		if m.cursor > 0 {
@@ -376,7 +383,7 @@ func (m GitLabModel) handleProjectList(msg tea.KeyMsg) (GitLabModel, tea.Cmd) {
 	return m, nil
 }
 
-func (m GitLabModel) handleConfigPath(msg tea.KeyMsg) (GitLabModel, tea.Cmd) {
+func (m Model) handleConfigPath(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
 		if m.cursor > 0 {
@@ -419,7 +426,7 @@ func (m GitLabModel) handleConfigPath(msg tea.KeyMsg) (GitLabModel, tea.Cmd) {
 	return m, nil
 }
 
-func (m GitLabModel) handleConfigPathInput(msg tea.KeyMsg) (GitLabModel, tea.Cmd) {
+func (m Model) handleConfigPathInput(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		m.screen = gitlabConfigPath

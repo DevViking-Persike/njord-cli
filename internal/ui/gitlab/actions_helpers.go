@@ -1,4 +1,4 @@
-package ui
+package gitlab
 
 import (
 	"fmt"
@@ -41,7 +41,7 @@ func pipelineStateStyle(status string) lipgloss.Style {
 	}
 }
 
-func (m GitLabActionsModel) renderBranchLine(i int) string {
+func (m ActionsModel) renderBranchLine(i int) string {
 	branch := m.branches[i]
 	prefix := "  "
 	if i == m.cursor {

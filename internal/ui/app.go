@@ -6,6 +6,7 @@ import (
 
 	jiraapp "github.com/DevViking-Persike/njord-cli/internal/app/jira"
 	jiraui "github.com/DevViking-Persike/njord-cli/internal/ui/jira"
+	gitlabui "github.com/DevViking-Persike/njord-cli/internal/ui/gitlab"
 	"github.com/DevViking-Persike/njord-cli/internal/app/project"
 	"github.com/DevViking-Persike/njord-cli/internal/config"
 	"github.com/DevViking-Persike/njord-cli/internal/docker"
@@ -77,8 +78,8 @@ type AppModel struct {
 	addProject    AddProjectModel
 	addStack      AddStackModel
 	settings      SettingsModel
-	gitlabScreen  GitLabModel
-	gitlabActions GitLabActionsModel
+	gitlabScreen  gitlabui.Model
+	gitlabActions gitlabui.ActionsModel
 	jiraSpaces    jiraui.SpacesModel
 	jiraIssues    jiraui.IssuesModel
 
@@ -308,7 +309,7 @@ func (m AppModel) updateGrid(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.gitlabClient = client
 				}
 			}
-			m.gitlabScreen = NewGitLabModel(m.config, m.configPath, m.gitlabClient)
+			m.gitlabScreen = gitlabui.NewModel(m.config, m.configPath, m.gitlabClient)
 			m.gitlabScreen.SetSize(m.width, m.height)
 			m.screen = ScreenGitLab
 			return m, m.gitlabScreen.Init()
@@ -508,7 +509,7 @@ func (m AppModel) updateGitLab(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if sel := m.gitlabScreen.Selected(); sel != nil {
 		m.gitlabScreen.ClearSelection()
 		if m.gitlabClient != nil {
-			m.gitlabActions = NewGitLabActionsModel(m.gitlabClient, sel.project.GitLabPath, sel.project.Alias, m.config.GitLab.GitLabURL())
+			m.gitlabActions = gitlabui.NewActionsModel(m.gitlabClient, sel.GitLabPath, sel.Alias, m.config.GitLab.GitLabURL())
 			m.gitlabActions.SetSize(m.width, m.height)
 			m.screen = ScreenGitLabActions
 			return m, m.gitlabActions.Init()
@@ -523,7 +524,7 @@ func (m AppModel) updateGitLabActions(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.gitlabActions, cmd = m.gitlabActions.Update(msg)
 
 	if m.gitlabActions.GoBack() {
-		m.gitlabScreen = NewGitLabModel(m.config, m.configPath, m.gitlabClient)
+		m.gitlabScreen = gitlabui.NewModel(m.config, m.configPath, m.gitlabClient)
 		m.gitlabScreen.SetSize(m.width, m.height)
 		m.screen = ScreenGitLab
 		return m, m.gitlabScreen.Init()

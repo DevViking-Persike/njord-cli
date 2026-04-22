@@ -1,4 +1,4 @@
-package ui
+package gitlab
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ import (
 
 // Step 1: Select Jira sigla
 
-func (m GitLabActionsModel) viewCreateBranchSigla() string {
+func (m ActionsModel) viewCreateBranchSigla() string {
 	var b strings.Builder
 	b.WriteString("  " + theme.TextStyle.Render("Selecione a sigla Jira:") + "\n\n")
 	start, end := m.scroll.Bounds(len(jiraTeams), glActionsChromeLines)
@@ -32,7 +32,7 @@ func (m GitLabActionsModel) viewCreateBranchSigla() string {
 	return b.String()
 }
 
-func (m GitLabActionsModel) handleCreateBranchSigla(msg tea.KeyMsg) (GitLabActionsModel, tea.Cmd) {
+func (m ActionsModel) handleCreateBranchSigla(msg tea.KeyMsg) (ActionsModel, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k", "down", "j":
 		if newCursor, moved := components.ListNav(msg, m.cursor, len(jiraTeams)); moved {
@@ -53,7 +53,7 @@ func (m GitLabActionsModel) handleCreateBranchSigla(msg tea.KeyMsg) (GitLabActio
 
 // Step 2: Enter ticket number
 
-func (m GitLabActionsModel) viewCreateBranchNumber() string {
+func (m ActionsModel) viewCreateBranchNumber() string {
 	var b strings.Builder
 	t := jiraTeams[m.branchSiglaIdx]
 	preview := fmt.Sprintf("feature/%s-___-%s-...", t.Sigla, t.Code)
@@ -65,7 +65,7 @@ func (m GitLabActionsModel) viewCreateBranchNumber() string {
 	return b.String()
 }
 
-func (m GitLabActionsModel) handleCreateBranchNumber(msg tea.KeyMsg) (GitLabActionsModel, tea.Cmd) {
+func (m ActionsModel) handleCreateBranchNumber(msg tea.KeyMsg) (ActionsModel, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		m.screen = glActionsCreateBranchSigla
@@ -93,7 +93,7 @@ func (m GitLabActionsModel) handleCreateBranchNumber(msg tea.KeyMsg) (GitLabActi
 
 // Step 3: Select type (delivery/subtask)
 
-func (m GitLabActionsModel) viewCreateBranchType() string {
+func (m ActionsModel) viewCreateBranchType() string {
 	var b strings.Builder
 	t := jiraTeams[m.branchSiglaIdx]
 	preview := fmt.Sprintf("feature/%s-%s-%s-___-...", t.Sigla, m.branchNumber, t.Code)
@@ -107,7 +107,7 @@ func (m GitLabActionsModel) viewCreateBranchType() string {
 	return b.String()
 }
 
-func (m GitLabActionsModel) handleCreateBranchType(msg tea.KeyMsg) (GitLabActionsModel, tea.Cmd) {
+func (m ActionsModel) handleCreateBranchType(msg tea.KeyMsg) (ActionsModel, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k", "down", "j":
 		if newCursor, moved := components.ListNav(msg, m.cursor, 2); moved {
@@ -127,7 +127,7 @@ func (m GitLabActionsModel) handleCreateBranchType(msg tea.KeyMsg) (GitLabAction
 
 // Step 4: Enter description
 
-func (m GitLabActionsModel) viewCreateBranchDesc() string {
+func (m ActionsModel) viewCreateBranchDesc() string {
 	var b strings.Builder
 	t := jiraTeams[m.branchSiglaIdx]
 	branchTypes := []string{"delivery", "subtask"}
@@ -147,7 +147,7 @@ func (m GitLabActionsModel) viewCreateBranchDesc() string {
 	return b.String()
 }
 
-func (m GitLabActionsModel) handleCreateBranchDesc(msg tea.KeyMsg) (GitLabActionsModel, tea.Cmd) {
+func (m ActionsModel) handleCreateBranchDesc(msg tea.KeyMsg) (ActionsModel, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		m.screen = glActionsCreateBranchType
@@ -218,7 +218,7 @@ func removeAccents(s string) string {
 
 // Step 5: Select base branch
 
-func (m GitLabActionsModel) viewCreateBranchBase() string {
+func (m ActionsModel) viewCreateBranchBase() string {
 	var b strings.Builder
 	b.WriteString("  " + theme.TextStyle.Render("Nova branch: ") + theme.GitLabTitleStyle.Render(m.branchName) + "\n\n")
 	if len(m.branches) == 0 {
@@ -236,7 +236,7 @@ func (m GitLabActionsModel) viewCreateBranchBase() string {
 	return b.String()
 }
 
-func (m GitLabActionsModel) handleCreateBranchBase(msg tea.KeyMsg) (GitLabActionsModel, tea.Cmd) {
+func (m ActionsModel) handleCreateBranchBase(msg tea.KeyMsg) (ActionsModel, tea.Cmd) {
 	if len(m.branches) == 0 {
 		if msg.String() == "esc" {
 			m.screen = glActionsCreateBranchDesc

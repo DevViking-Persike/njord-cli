@@ -1,4 +1,4 @@
-package ui
+package gitlab
 
 import (
 	"fmt"
@@ -71,7 +71,7 @@ type gitlabActionDoneMsg struct {
 	err     error
 }
 
-type GitLabActionsModel struct {
+type ActionsModel struct {
 	client      *gitlabclient.Client
 	projectPath string
 	projectName string
@@ -100,8 +100,8 @@ type GitLabActionsModel struct {
 	width int
 }
 
-func NewGitLabActionsModel(client *gitlabclient.Client, projectPath, projectName, gitlabURL string) GitLabActionsModel {
-	return GitLabActionsModel{
+func NewActionsModel(client *gitlabclient.Client, projectPath, projectName, gitlabURL string) ActionsModel {
+	return ActionsModel{
 		client:      client,
 		projectPath: projectPath,
 		projectName: projectName,
@@ -110,11 +110,11 @@ func NewGitLabActionsModel(client *gitlabclient.Client, projectPath, projectName
 	}
 }
 
-func (m GitLabActionsModel) Init() tea.Cmd {
+func (m ActionsModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m GitLabActionsModel) Update(msg tea.Msg) (GitLabActionsModel, tea.Cmd) {
+func (m ActionsModel) Update(msg tea.Msg) (ActionsModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case gitlabMRsMsg:
 		m.loading = false
@@ -201,7 +201,7 @@ func (m GitLabActionsModel) Update(msg tea.Msg) (GitLabActionsModel, tea.Cmd) {
 	return m, nil
 }
 
-func (m GitLabActionsModel) View() string {
+func (m ActionsModel) View() string {
 	var b strings.Builder
 
 	header := theme.GitLabTitleSelectedStyle.Render("  ◆ GitLab — " + m.projectName)
@@ -241,16 +241,16 @@ func (m GitLabActionsModel) View() string {
 	return b.String()
 }
 
-func (m *GitLabActionsModel) SetSize(w, h int) {
+func (m *ActionsModel) SetSize(w, h int) {
 	m.width = w
 	m.scroll.Height = h
 }
 
-func (m *GitLabActionsModel) GoBack() bool { return m.goBack }
+func (m *ActionsModel) GoBack() bool { return m.goBack }
 
 // --- Menu ---
 
-func (m GitLabActionsModel) viewMenu() string {
+func (m ActionsModel) viewMenu() string {
 	var b strings.Builder
 	options := []string{"Merge Requests", "Pipelines", "Disparar Pipeline", "Criar Branch", "Abrir no Navegador"}
 	selectedFn := func(s string) string { return theme.GitLabTitleSelectedStyle.Render(s) }
@@ -261,7 +261,7 @@ func (m GitLabActionsModel) viewMenu() string {
 	return b.String()
 }
 
-func (m GitLabActionsModel) handleMenu(msg tea.KeyMsg) (GitLabActionsModel, tea.Cmd) {
+func (m ActionsModel) handleMenu(msg tea.KeyMsg) (ActionsModel, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k", "down", "j":
 		if newCursor, moved := components.ListNav(msg, m.cursor, 5); moved {
@@ -298,14 +298,14 @@ func (m GitLabActionsModel) handleMenu(msg tea.KeyMsg) (GitLabActionsModel, tea.
 
 // --- Result ---
 
-func (m GitLabActionsModel) viewResult() string {
+func (m ActionsModel) viewResult() string {
 	var b strings.Builder
 	b.WriteString(components.RenderMessage(m.message, m.msgType))
 	b.WriteString("\n" + theme.HelpStyle.Render("  enter voltar"))
 	return b.String()
 }
 
-func (m GitLabActionsModel) handleResult(msg tea.KeyMsg) (GitLabActionsModel, tea.Cmd) {
+func (m ActionsModel) handleResult(msg tea.KeyMsg) (ActionsModel, tea.Cmd) {
 	if msg.String() == "enter" || msg.String() == "esc" {
 		m.screen = glActionsMenu
 		m.cursor = 0
@@ -316,28 +316,28 @@ func (m GitLabActionsModel) handleResult(msg tea.KeyMsg) (GitLabActionsModel, te
 
 // --- Async commands ---
 
-func (m GitLabActionsModel) fetchMRs() tea.Cmd {
+func (m ActionsModel) fetchMRs() tea.Cmd {
 	return func() tea.Msg {
 		mrs, err := gitlab.LoadMergeRequests(m.client, m.projectPath)
 		return gitlabMRsMsg{mrs: mrs, err: err}
 	}
 }
 
-func (m GitLabActionsModel) fetchPipelines() tea.Cmd {
+func (m ActionsModel) fetchPipelines() tea.Cmd {
 	return func() tea.Msg {
 		pipelines, err := gitlab.LoadPipelines(m.client, m.projectPath, 20)
 		return gitlabPipelinesMsg{pipelines: pipelines, err: err}
 	}
 }
 
-func (m GitLabActionsModel) fetchBranches() tea.Cmd {
+func (m ActionsModel) fetchBranches() tea.Cmd {
 	return func() tea.Msg {
 		branches, err := gitlab.LoadBranches(m.client, m.projectPath)
 		return gitlabBranchesMsg{branches: branches, err: err}
 	}
 }
 
-func (m GitLabActionsModel) triggerPipeline(ref string) tea.Cmd {
+func (m ActionsModel) triggerPipeline(ref string) tea.Cmd {
 	return func() tea.Msg {
 		message, err := gitlab.TriggerProjectPipeline(m.client, m.projectPath, ref)
 		if err != nil {
@@ -350,7 +350,7 @@ func (m GitLabActionsModel) triggerPipeline(ref string) tea.Cmd {
 	}
 }
 
-func (m GitLabActionsModel) createBranch(name, ref string) tea.Cmd {
+func (m ActionsModel) createBranch(name, ref string) tea.Cmd {
 	return func() tea.Msg {
 		message, err := gitlab.CreateProjectBranch(m.client, m.projectPath, name, ref)
 		if err != nil {
