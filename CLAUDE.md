@@ -58,6 +58,7 @@ Resumo:
 5. **Simplicidade** — sem abstração prematura, sem flags booleanas
 6. **Refatoração contínua** — teste antes de mexer, commit separado do bugfix
 7. **Deploy** — `make install` depois de qualquer mudança testável via `njord`
+8. **Delegar execução** — pedir pro usuário rodar comandos cujo output não influencia a próxima decisão (TUI, testes de UX, make install pós-rodada)
 
 Skills: `/check-rules` (audita), `/refactor <arquivo>` (refatora guiado).
 
