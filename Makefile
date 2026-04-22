@@ -2,7 +2,7 @@
 
 BINARY := njord
 PKG := ./...
-MUTATION_PKGS := ./internal/app/ ./internal/docker/ ./internal/config/
+MUTATION_PKGS := ./internal/app/ ./internal/docker/ ./internal/config/ ./internal/jira/
 
 build:
 	go build -o $(BINARY) ./cmd/njord/
