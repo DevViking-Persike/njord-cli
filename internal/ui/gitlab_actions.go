@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/DevViking-Persike/njord-cli/internal/app"
 	"github.com/DevViking-Persike/njord-cli/internal/gitlab"
 	"github.com/DevViking-Persike/njord-cli/internal/theme"
 	"github.com/DevViking-Persike/njord-cli/internal/ui/components"
@@ -317,47 +318,47 @@ func (m GitLabActionsModel) handleResult(msg tea.KeyMsg) (GitLabActionsModel, te
 
 func (m GitLabActionsModel) fetchMRs() tea.Cmd {
 	return func() tea.Msg {
-		mrs, err := m.client.ListMergeRequests(m.projectPath, "opened")
+		mrs, err := app.LoadMergeRequests(m.client, m.projectPath)
 		return gitlabMRsMsg{mrs: mrs, err: err}
 	}
 }
 
 func (m GitLabActionsModel) fetchPipelines() tea.Cmd {
 	return func() tea.Msg {
-		pipelines, err := m.client.ListPipelines(m.projectPath, 20)
+		pipelines, err := app.LoadPipelines(m.client, m.projectPath, 20)
 		return gitlabPipelinesMsg{pipelines: pipelines, err: err}
 	}
 }
 
 func (m GitLabActionsModel) fetchBranches() tea.Cmd {
 	return func() tea.Msg {
-		branches, err := m.client.ListBranchesDetailed(m.projectPath)
+		branches, err := app.LoadBranches(m.client, m.projectPath)
 		return gitlabBranchesMsg{branches: branches, err: err}
 	}
 }
 
 func (m GitLabActionsModel) triggerPipeline(ref string) tea.Cmd {
 	return func() tea.Msg {
-		p, err := m.client.TriggerPipeline(m.projectPath, ref)
+		message, err := app.TriggerProjectPipeline(m.client, m.projectPath, ref)
 		if err != nil {
 			return gitlabActionDoneMsg{err: err}
 		}
 		return gitlabActionDoneMsg{
 			success: true,
-			message: fmt.Sprintf("Pipeline #%d disparada na branch %s", p.ID, ref),
+			message: message,
 		}
 	}
 }
 
 func (m GitLabActionsModel) createBranch(name, ref string) tea.Cmd {
 	return func() tea.Msg {
-		err := m.client.CreateBranch(m.projectPath, name, ref)
+		message, err := app.CreateProjectBranch(m.client, m.projectPath, name, ref)
 		if err != nil {
 			return gitlabActionDoneMsg{err: err}
 		}
 		return gitlabActionDoneMsg{
 			success: true,
-			message: fmt.Sprintf("Branch '%s' criada a partir de '%s'", name, ref),
+			message: message,
 		}
 	}
 }

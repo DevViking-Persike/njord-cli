@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/DevViking-Persike/njord-cli/internal/app"
 	"github.com/DevViking-Persike/njord-cli/internal/config"
 	"github.com/DevViking-Persike/njord-cli/internal/docker"
 	"github.com/DevViking-Persike/njord-cli/internal/gitlab"
@@ -63,15 +64,15 @@ type AppModel struct {
 	height int
 
 	// Sub-models
-	grid           GridModel
-	projects       ProjectsModel
-	dockerScreen   DockerModel
-	dockerActions  DockerActionsModel
-	addProject     AddProjectModel
-	addStack       AddStackModel
-	settings       SettingsModel
-	gitlabScreen   GitLabModel
-	gitlabActions  GitLabActionsModel
+	grid          GridModel
+	projects      ProjectsModel
+	dockerScreen  DockerModel
+	dockerActions DockerActionsModel
+	addProject    AddProjectModel
+	addStack      AddStackModel
+	settings      SettingsModel
+	gitlabScreen  GitLabModel
+	gitlabActions GitLabActionsModel
 
 	// GitLab client (lazy init)
 	gitlabClient *gitlab.Client
@@ -318,14 +319,11 @@ func (m AppModel) updateProjects(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if proj := m.projects.Selected(); proj != nil {
-		path := m.config.ResolveProjectPath(*proj)
-
-		if path == "@rdp" {
-			m.result = &Result{Command: "gnome-terminal --title='TRON - VPS RDP' -- bash -c 'echo \"Conectando à VPS via RDP...\"; echo \"Use o cliente RDP em localhost:3390\"; echo \"\"; cloudflared access rdp --hostname tron.victorpersike.dev.br --url localhost:3390; exec bash' &"}
-		} else {
-			editor := m.config.Settings.Editor
-			m.result = &Result{Command: "cd " + shellQuote(path) + " && " + editor + " ."}
+		command, err := app.BuildProjectCommand(m.config, *proj)
+		if err != nil {
+			return m, nil
 		}
+		m.result = &Result{Command: command}
 		m.quitting = true
 		return m, tea.Quit
 	}
@@ -591,8 +589,4 @@ func scheduleRefresh() tea.Cmd {
 	return tea.Tick(2*time.Minute, func(time.Time) tea.Msg {
 		return gitlabRefreshTickMsg{}
 	})
-}
-
-func shellQuote(s string) string {
-	return "\"" + s + "\""
 }

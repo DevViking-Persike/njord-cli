@@ -1,14 +1,13 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
-	"os/exec"
-	"strings"
 
+	"github.com/DevViking-Persike/njord-cli/internal/app"
 	"github.com/DevViking-Persike/njord-cli/internal/config"
 	"github.com/DevViking-Persike/njord-cli/internal/docker"
-	"github.com/DevViking-Persike/njord-cli/internal/gitlab"
 	"github.com/DevViking-Persike/njord-cli/internal/ui"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -57,8 +56,16 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		configPath = config.DefaultConfigPath()
 	}
 
+	_, statErr := os.Stat(configPath)
 	cfg, err := config.Load(configPath)
 	if err != nil {
+		if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+			return fmt.Errorf("checking config path %s: %w", configPath, statErr)
+		}
+		if statErr == nil {
+			return fmt.Errorf("loading config %s: %w", configPath, err)
+		}
+
 		// If config doesn't exist, create a default one
 		fmt.Fprintf(os.Stderr, "Config not found at %s, creating default...\n", configPath)
 		cfg = defaultConfig()
@@ -134,69 +141,7 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 }
 
 func runPush(cmd *cobra.Command, args []string) error {
-	// Detecta branch atual
-	branchOut, err := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD").Output()
-	if err != nil {
-		return fmt.Errorf("detectando branch atual: %w", err)
-	}
-	branch := strings.TrimSpace(string(branchOut))
-
-	fmt.Fprintf(os.Stderr, "📌 Branch: %s\n", branch)
-
-	// Executa git push
-	pushArgs := append([]string{"push"}, args...)
-	pushCmd := exec.Command("git", pushArgs...)
-	pushCmd.Stdout = os.Stdout
-	pushCmd.Stderr = os.Stderr
-	if err := pushCmd.Run(); err != nil {
-		return fmt.Errorf("git push falhou: %w", err)
-	}
-
-	// Verifica se é subtask
-	if !strings.Contains(branch, "-subtask-") {
-		return nil
-	}
-
-	fmt.Fprintf(os.Stderr, "\n🔧 Branch subtask detectada, disparando pipeline...\n")
-
-	// Resolve GitLab path do repositório atual
-	cwd, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("obtendo diretório atual: %w", err)
-	}
-	projectPath, err := gitlab.ParseGitLabPath(cwd)
-	if err != nil {
-		return fmt.Errorf("detectando projeto GitLab: %w", err)
-	}
-
-	// Carrega config para obter token
-	cfgPath := configPath
-	if cfgPath == "" {
-		cfgPath = config.DefaultConfigPath()
-	}
-	cfg, err := config.Load(cfgPath)
-	if err != nil {
-		return fmt.Errorf("carregando config: %w", err)
-	}
-	if cfg.GitLab.Token == "" {
-		return fmt.Errorf("token GitLab não configurado em %s", cfgPath)
-	}
-
-	// Cria client GitLab e dispara pipeline
-	client, err := gitlab.NewClient(cfg.GitLab.Token, cfg.GitLab.URL)
-	if err != nil {
-		return fmt.Errorf("criando client GitLab: %w", err)
-	}
-
-	pipeline, err := client.TriggerMRPipeline(projectPath, branch)
-	if err != nil {
-		return fmt.Errorf("disparando pipeline: %w", err)
-	}
-
-	fmt.Fprintf(os.Stderr, "✅ Pipeline #%d disparada (MR pipeline) em %s\n", pipeline.ID, branch)
-	fmt.Fprintf(os.Stderr, "🔗 %s\n", pipeline.URL)
-
-	return nil
+	return app.NewPushService().Run(configPath, args, os.Stdout, os.Stderr)
 }
 
 func defaultConfig() *config.Config {

@@ -3,10 +3,10 @@ package ui
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/DevViking-Persike/njord-cli/internal/app"
 	"github.com/DevViking-Persike/njord-cli/internal/config"
 	"github.com/DevViking-Persike/njord-cli/internal/theme"
 	tea "github.com/charmbracelet/bubbletea"
@@ -695,67 +695,44 @@ func (m AddProjectModel) doClone() tea.Cmd {
 	gitURL := m.gitURL
 	clonePath := m.clonePath
 	return func() tea.Msg {
-		cmd := exec.Command("git", "clone", gitURL, clonePath)
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			return cloneDoneMsg{err: fmt.Errorf("%s: %s", err, string(output))}
+		if err := app.CloneProject(gitURL, clonePath); err != nil {
+			return cloneDoneMsg{err: err}
 		}
 		return cloneDoneMsg{err: nil}
 	}
 }
 
 func (m *AddProjectModel) saveProject() error {
-	var relPath string
-	avitaBase := config.ExpandPath(m.cfg.Settings.ProjectsBase)
-	persBase := config.ExpandPath(m.cfg.Settings.PersonalBase)
-
-	if strings.HasPrefix(m.clonePath, avitaBase) {
-		relPath, _ = filepath.Rel(avitaBase, m.clonePath)
-	} else if strings.HasPrefix(m.clonePath, persBase) {
-		home, _ := os.UserHomeDir()
-		relPath, _ = filepath.Rel(home, m.clonePath)
-	} else {
-		relPath = m.clonePath
-	}
-
-	project := config.Project{
-		Alias: m.alias,
-		Desc:  m.description,
-		Path:  relPath,
-		Group: m.group,
-	}
-
-	found := false
-	for i, cat := range m.cfg.Categories {
-		if cat.ID == m.categoryID {
-			m.cfg.Categories[i].Projects = append(m.cfg.Categories[i].Projects, project)
-			found = true
-			break
-		}
-	}
-
-	if !found && m.newCatName != "" {
-		m.cfg.Categories = append(m.cfg.Categories, config.Category{
-			ID:       m.categoryID,
-			Name:     m.newCatName,
-			Sub:      m.newCatSub,
-			Projects: []config.Project{project},
-		})
-	}
-
-	return config.Save(m.cfg, m.configPath)
+	return app.SaveProject(m.cfg, m.configPath, app.AddProjectInput{
+		GitURL:          m.gitURL,
+		ClonePath:       m.clonePath,
+		Alias:           m.alias,
+		Description:     m.description,
+		CategoryID:      m.categoryID,
+		NewCategoryName: m.newCatName,
+		NewCategorySub:  m.newCatSub,
+		Group:           m.group,
+	})
 }
 
 func extractRepoName(url string) string {
 	if strings.Contains(url, ":") && strings.HasPrefix(url, "git@") {
 		parts := strings.SplitN(url, ":", 2)
 		if len(parts) == 2 {
-			name := filepath.Base(parts[1])
+			name := pathBase(parts[1])
 			return strings.TrimSuffix(name, ".git")
 		}
 	}
-	name := filepath.Base(url)
+	name := pathBase(url)
 	return strings.TrimSuffix(name, ".git")
+}
+
+func pathBase(path string) string {
+	lastSlash := strings.LastIndex(path, "/")
+	if lastSlash == -1 {
+		return path
+	}
+	return path[lastSlash+1:]
 }
 
 func suggestAlias(url string) string {

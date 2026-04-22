@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -14,6 +16,8 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	dockerclient "github.com/docker/docker/client"
 )
+
+var ansiRegexp = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]`)
 
 type ContainerInfo struct {
 	Name  string
@@ -28,6 +32,10 @@ type StackStatus struct {
 	Label   string
 }
 
+func UnavailableStatus() StackStatus {
+	return StackStatus{Symbol: "!", Label: "docker indisponivel"}
+}
+
 type Client struct {
 	cli *dockerclient.Client
 }
@@ -37,7 +45,12 @@ func NewClient() (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("creating docker client: %w", err)
 	}
-	return &Client{cli: cli}, nil
+	client := &Client{cli: cli}
+	if !client.IsAvailable() {
+		client.Close()
+		return nil, fmt.Errorf("docker daemon not reachable")
+	}
+	return client, nil
 }
 
 func (c *Client) Close() {
@@ -166,6 +179,7 @@ func (c *Client) listByProject(projectName string) []ContainerInfo {
 
 func (c *Client) listByCompose(composePath string) []ContainerInfo {
 	cmd := exec.Command("docker", "compose", "-f", composePath, "ps", "--format", "{{.Name}}\t{{.State}}\t{{.Ports}}")
+	cmd.Dir = filepath.Dir(composePath)
 	out, err := cmd.Output()
 	if err != nil {
 		return nil
@@ -194,25 +208,82 @@ func (c *Client) listByCompose(composePath string) []ContainerInfo {
 
 func (c *Client) isComposeValid(composePath string) bool {
 	cmd := exec.Command("docker", "compose", "-f", composePath, "config", "-q")
+	cmd.Dir = filepath.Dir(composePath)
 	return cmd.Run() == nil
 }
 
 func (c *Client) composeExec(composePath string, args ...string) error {
 	cmdArgs := append([]string{"compose", "-f", composePath}, args...)
 	cmd := exec.Command("docker", cmdArgs...)
-	cmd.Stdout = io.Discard
-	cmd.Stderr = io.Discard
-	return cmd.Run()
+	cmd.Dir = filepath.Dir(composePath)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		if msg := extractDockerError(string(output)); msg != "" {
+			return fmt.Errorf("%s", msg)
+		}
+		return err
+	}
+	return nil
 }
 
 func (c *Client) composeLogs(composePath string, tail int) (string, error) {
 	cmd := exec.Command("docker", "compose", "-f", composePath, "logs",
 		"--tail", fmt.Sprintf("%d", tail), "--no-log-prefix")
+	cmd.Dir = filepath.Dir(composePath)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
+		if msg := extractDockerError(string(out)); msg != "" {
+			return "", fmt.Errorf("%s", msg)
+		}
 		return "", err
 	}
 	return string(out), nil
+}
+
+// extractDockerError picks the most meaningful error line from docker CLI output.
+// Docker compose prints progress (with ANSI codes) and the real failure is either
+// a line containing "error" / "fail" or the last non-progress line.
+func extractDockerError(output string) string {
+	clean := ansiRegexp.ReplaceAllString(output, "")
+	lines := strings.Split(strings.TrimRight(clean, "\n"), "\n")
+
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		lower := strings.ToLower(line)
+		if strings.Contains(lower, "error") || strings.Contains(lower, "failed") ||
+			strings.Contains(lower, "cannot") || strings.Contains(lower, "could not") {
+			return cleanDockerLine(line)
+		}
+	}
+
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" || isBenignProgressLine(line) {
+			continue
+		}
+		return cleanDockerLine(line)
+	}
+	return ""
+}
+
+func isBenignProgressLine(line string) bool {
+	suffixes := []string{" Created", " Started", " Running", " Pulled", " Pulling"}
+	for _, s := range suffixes {
+		if strings.HasSuffix(line, s) {
+			return true
+		}
+	}
+	return strings.HasPrefix(line, "[+]")
+}
+
+func cleanDockerLine(line string) string {
+	line = strings.TrimPrefix(line, "Error response from daemon: ")
+	line = strings.TrimPrefix(line, "Error: ")
+	line = strings.TrimPrefix(line, "ERROR: ")
+	return line
 }
 
 func (c *Client) startByLabel(projectName string) error {

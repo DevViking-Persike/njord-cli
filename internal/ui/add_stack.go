@@ -43,9 +43,8 @@ type AddStackModel struct {
 
 func NewAddStackModel(cfg *config.Config, configPath string) AddStackModel {
 	// Discover compose files not yet registered
-	home, _ := os.UserHomeDir()
-	avitaDir := filepath.Join(home, "Avita")
-	discovered := discoverComposeFiles(avitaDir, cfg.DockerStacks)
+	baseDir := config.ExpandPath(cfg.Settings.ProjectsBase)
+	discovered := discoverComposeFiles(baseDir, cfg.DockerStacks)
 
 	return AddStackModel{
 		cfg:        cfg,
@@ -282,11 +281,22 @@ func discoverComposeFiles(baseDir string, existing []config.DockerStack) []strin
 		if !entry.IsDir() {
 			continue
 		}
-		composePath := filepath.Join(baseDir, entry.Name(), "docker-compose.yml")
-		if _, err := os.Stat(composePath); err == nil {
-			if !registeredPaths[entry.Name()] {
-				discovered = append(discovered, entry.Name())
+		dir := filepath.Join(baseDir, entry.Name())
+		candidates := []string{
+			filepath.Join(dir, "docker-compose.yml"),
+			filepath.Join(dir, "docker-compose.yaml"),
+			filepath.Join(dir, "compose.yml"),
+			filepath.Join(dir, "compose.yaml"),
+		}
+		foundCompose := false
+		for _, composePath := range candidates {
+			if _, err := os.Stat(composePath); err == nil {
+				foundCompose = true
+				break
 			}
+		}
+		if foundCompose && !registeredPaths[entry.Name()] {
+			discovered = append(discovered, entry.Name())
 		}
 	}
 	return discovered

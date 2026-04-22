@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/DevViking-Persike/njord-cli/internal/app"
 	"github.com/DevViking-Persike/njord-cli/internal/config"
 	"github.com/DevViking-Persike/njord-cli/internal/theme"
 	"github.com/DevViking-Persike/njord-cli/internal/ui/components"
@@ -407,10 +408,15 @@ func (m SettingsModel) handleDeleteConfirm(msg tea.KeyMsg) (SettingsModel, tea.C
 	case "enter":
 		if m.cursor == 0 {
 			ref := m.allProjects[m.selectedProjIdx]
-			cat := &m.cfg.Categories[ref.catIdx]
-			cat.Projects = append(cat.Projects[:ref.projIdx], cat.Projects[ref.projIdx+1:]...)
-			m.message, m.messageType = components.SaveConfig(m.cfg, m.configPath, "Projeto removido com sucesso!")
-			m.screen = settingsDone
+			if err := app.RemoveProject(m.cfg, m.configPath, ref.catIdx, ref.projIdx); err != nil {
+				m.message = fmt.Sprintf("Erro ao remover projeto: %s", err)
+				m.messageType = "error"
+				m.screen = settingsDone
+			} else {
+				m.message = "Projeto removido com sucesso!"
+				m.messageType = "ok"
+				m.screen = settingsDone
+			}
 		} else {
 			m.cursor = m.selectedProjIdx
 			m.screen = settingsDeleteProject
@@ -481,9 +487,15 @@ func (m SettingsModel) handleEditGroupSelect(msg tea.KeyMsg) (SettingsModel, tea
 		ref := m.allProjects[m.selectedProjIdx]
 		if m.cursor == 0 {
 			// Sem grupo
-			m.cfg.Categories[ref.catIdx].Projects[ref.projIdx].Group = ""
-			m.message, m.messageType = components.SaveConfig(m.cfg, m.configPath, "Grupo removido com sucesso!")
-			m.screen = settingsDone
+			if err := app.UpdateProjectGroup(m.cfg, m.configPath, ref.catIdx, ref.projIdx, ""); err != nil {
+				m.message = fmt.Sprintf("Erro ao atualizar grupo: %s", err)
+				m.messageType = "error"
+				m.screen = settingsDone
+			} else {
+				m.message = "Grupo removido com sucesso!"
+				m.messageType = "ok"
+				m.screen = settingsDone
+			}
 		} else if m.cursor == len(m.options)-1 {
 			// Novo grupo
 			m.inputBuf = ""
@@ -492,9 +504,15 @@ func (m SettingsModel) handleEditGroupSelect(msg tea.KeyMsg) (SettingsModel, tea
 		} else {
 			// Grupo existente
 			group := m.options[m.cursor]
-			m.cfg.Categories[ref.catIdx].Projects[ref.projIdx].Group = group
-			m.message, m.messageType = components.SaveConfig(m.cfg, m.configPath, fmt.Sprintf("Grupo '%s' definido com sucesso!", group))
-			m.screen = settingsDone
+			if err := app.UpdateProjectGroup(m.cfg, m.configPath, ref.catIdx, ref.projIdx, group); err != nil {
+				m.message = fmt.Sprintf("Erro ao atualizar grupo: %s", err)
+				m.messageType = "error"
+				m.screen = settingsDone
+			} else {
+				m.message = fmt.Sprintf("Grupo '%s' definido com sucesso!", group)
+				m.messageType = "ok"
+				m.screen = settingsDone
+			}
 		}
 	}
 	return m, nil
@@ -562,8 +580,13 @@ func (m SettingsModel) submitSettingsInput() (SettingsModel, tea.Cmd) {
 			m.message = "Descrição não pode ser vazia"
 			return m, nil
 		}
-		m.cfg.Categories[m.selectedCatIdx].Sub = val
-		m.message, m.messageType = components.SaveConfig(m.cfg, m.configPath, "Categoria atualizada com sucesso!")
+		if err := app.UpdateCategory(m.cfg, m.configPath, m.selectedCatIdx, m.cfg.Categories[m.selectedCatIdx].Name, val); err != nil {
+			m.message = fmt.Sprintf("Erro ao atualizar categoria: %s", err)
+			m.messageType = "error"
+		} else {
+			m.message = "Categoria atualizada com sucesso!"
+			m.messageType = "ok"
+		}
 		m.screen = settingsDone
 		return m, nil
 
@@ -572,13 +595,20 @@ func (m SettingsModel) submitSettingsInput() (SettingsModel, tea.Cmd) {
 			m.message = "Path não pode ser vazio"
 			return m, nil
 		}
+		var err error
 		switch m.editingField {
 		case "projects_base":
-			m.cfg.Settings.ProjectsBase = val
+			err = app.UpdateProjectsBase(m.cfg, m.configPath, val)
 		case "personal_base":
-			m.cfg.Settings.PersonalBase = val
+			err = app.UpdatePersonalBase(m.cfg, m.configPath, val)
 		}
-		m.message, m.messageType = components.SaveConfig(m.cfg, m.configPath, "Path atualizado com sucesso!")
+		if err != nil {
+			m.message = fmt.Sprintf("Erro ao atualizar path: %s", err)
+			m.messageType = "error"
+		} else {
+			m.message = "Path atualizado com sucesso!"
+			m.messageType = "ok"
+		}
 		m.screen = settingsDone
 		return m, nil
 
@@ -588,18 +618,27 @@ func (m SettingsModel) submitSettingsInput() (SettingsModel, tea.Cmd) {
 			return m, nil
 		}
 		ref := m.allProjects[m.selectedProjIdx]
-		m.cfg.Categories[ref.catIdx].Projects[ref.projIdx].Group = val
-		m.message, m.messageType = components.SaveConfig(m.cfg, m.configPath, fmt.Sprintf("Grupo '%s' definido com sucesso!", val))
+		if err := app.UpdateProjectGroup(m.cfg, m.configPath, ref.catIdx, ref.projIdx, val); err != nil {
+			m.message = fmt.Sprintf("Erro ao atualizar grupo: %s", err)
+			m.messageType = "error"
+		} else {
+			m.message = fmt.Sprintf("Grupo '%s' definido com sucesso!", val)
+			m.messageType = "ok"
+		}
 		m.screen = settingsDone
 		return m, nil
 
 	case settingsEditGitLabToken:
-		m.cfg.GitLab.Token = val
-		successMsg := "Token GitLab salvo com sucesso!"
-		if val == "" {
-			successMsg = "Token GitLab removido!"
+		if err := app.UpdateGitLabToken(m.cfg, m.configPath, val); err != nil {
+			m.message = fmt.Sprintf("Erro ao salvar token GitLab: %s", err)
+			m.messageType = "error"
+		} else {
+			m.message = "Token GitLab salvo com sucesso!"
+			if val == "" {
+				m.message = "Token GitLab removido!"
+			}
+			m.messageType = "ok"
 		}
-		m.message, m.messageType = components.SaveConfig(m.cfg, m.configPath, successMsg)
 		m.screen = settingsDone
 		return m, nil
 	}

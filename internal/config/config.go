@@ -106,7 +106,7 @@ func Save(cfg *Config, path string) error {
 	}
 
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("creating config dir: %w", err)
 	}
 
@@ -115,7 +115,35 @@ func Save(cfg *Config, path string) error {
 		return fmt.Errorf("marshaling config: %w", err)
 	}
 
-	return os.WriteFile(path, data, 0644)
+	tmpFile, err := os.CreateTemp(dir, ".njord-*.yaml")
+	if err != nil {
+		return fmt.Errorf("creating temp config file: %w", err)
+	}
+
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+
+	if _, err := tmpFile.Write(data); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("writing temp config file: %w", err)
+	}
+	if err := tmpFile.Chmod(0600); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("setting temp config permissions: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("closing temp config file: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, path); err != nil {
+		return fmt.Errorf("replacing config file: %w", err)
+	}
+
+	if err := os.Chmod(path, 0600); err != nil {
+		return fmt.Errorf("setting config permissions: %w", err)
+	}
+
+	return nil
 }
 
 // ResolveProjectPath returns the full filesystem path for a project.
@@ -151,8 +179,26 @@ func (cfg *Config) ResolveProjectPath(p Project) string {
 
 // ResolveDockerComposePath returns the full path to docker-compose.yml for a stack.
 func (cfg *Config) ResolveDockerComposePath(stack DockerStack) string {
-	base := ExpandPath(cfg.Settings.ProjectsBase)
-	return filepath.Join(base, stack.Path, "docker-compose.yml")
+	stackPath := stack.Path
+	if !filepath.IsAbs(stackPath) {
+		base := ExpandPath(cfg.Settings.ProjectsBase)
+		stackPath = filepath.Join(base, stackPath)
+	}
+
+	candidates := []string{
+		filepath.Join(stackPath, "docker-compose.yml"),
+		filepath.Join(stackPath, "docker-compose.yaml"),
+		filepath.Join(stackPath, "compose.yml"),
+		filepath.Join(stackPath, "compose.yaml"),
+	}
+
+	for _, candidate := range candidates {
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+
+	return candidates[0]
 }
 
 // TotalProjects returns the total number of projects across all categories.

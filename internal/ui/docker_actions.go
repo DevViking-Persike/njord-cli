@@ -35,6 +35,7 @@ type DockerActionsModel struct {
 	cfg         *config.Config
 	docker      *docker.Client
 	stack       config.DockerStack
+	available   bool
 	cursor      int
 	goBack      bool
 	containers  []docker.ContainerInfo
@@ -60,15 +61,17 @@ var actionLabels = []struct {
 }
 
 func NewDockerActionsModel(cfg *config.Config, dockerClient *docker.Client, stack config.DockerStack) DockerActionsModel {
-	composePath := cfg.ResolveDockerComposePath(stack)
-	projectName := filepath.Base(stack.Path)
-	containers := dockerClient.ListContainers(projectName)
-	_ = composePath // used in actions
+	var containers []docker.ContainerInfo
+	if dockerClient != nil {
+		projectName := filepath.Base(stack.Path)
+		containers = dockerClient.ListContainers(projectName)
+	}
 
 	return DockerActionsModel{
 		cfg:        cfg,
 		docker:     dockerClient,
 		stack:      stack,
+		available:  dockerClient != nil,
 		containers: containers,
 	}
 }
@@ -89,8 +92,10 @@ func (m DockerActionsModel) Update(msg tea.Msg) (DockerActionsModel, tea.Cmd) {
 			m.messageType = "ok"
 		}
 		// Refresh containers
-		projectName := filepath.Base(m.stack.Path)
-		m.containers = m.docker.ListContainers(projectName)
+		if m.docker != nil {
+			projectName := filepath.Base(m.stack.Path)
+			m.containers = m.docker.ListContainers(projectName)
+		}
 		return m, nil
 
 	case dockerLogsMsg:
@@ -130,6 +135,11 @@ func (m DockerActionsModel) Update(msg tea.Msg) (DockerActionsModel, tea.Cmd) {
 			m.goBack = true
 			return m, nil
 		case "enter":
+			if !m.available {
+				m.message = "Docker indisponível"
+				m.messageType = "error"
+				return m, nil
+			}
 			return m, m.executeAction(actionLabels[m.cursor].action)
 		}
 	}
@@ -152,6 +162,15 @@ func (m DockerActionsModel) View() string {
 	composePath := m.cfg.ResolveDockerComposePath(m.stack)
 	b.WriteString("  " + theme.DimStyle.Render(composePath) + "\n\n")
 
+	if !m.available {
+		b.WriteString("  " + theme.WarningStyle.Render("Docker indisponível. Verifique o daemon e as permissões do socket.") + "\n\n")
+		if m.message != "" {
+			b.WriteString("  " + theme.ErrorStyle.Render("✗ "+m.message) + "\n\n")
+		}
+		b.WriteString(theme.HelpStyle.Render("  esc back"))
+		return b.String()
+	}
+
 	// Container details
 	if len(m.containers) == 0 {
 		b.WriteString(theme.DimStyle.Render("  Nenhum container encontrado (stack parada)") + "\n")
@@ -169,7 +188,7 @@ func (m DockerActionsModel) View() string {
 			line := fmt.Sprintf("  %s  %-30s %s  %s",
 				stateStyle.Render(icon),
 				theme.TextStyle.Render(ct.Name),
-				stateStyle.Render(ct.State),
+				stateStyle.Render(translateDockerState(ct.State)),
 				theme.DimStyle.Render(ct.Ports))
 			b.WriteString(line + "\n")
 		}
@@ -232,6 +251,25 @@ func (m DockerActionsModel) View() string {
 	return b.String()
 }
 
+func translateDockerState(state string) string {
+	switch state {
+	case "running":
+		return "rodando"
+	case "created":
+		return "criado"
+	case "exited":
+		return "parado"
+	case "paused":
+		return "pausado"
+	case "restarting":
+		return "reiniciando"
+	case "dead":
+		return "morto"
+	default:
+		return state
+	}
+}
+
 func (m *DockerActionsModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
@@ -240,6 +278,13 @@ func (m *DockerActionsModel) SetSize(w, h int) {
 func (m *DockerActionsModel) GoBack() bool { return m.goBack }
 
 func (m *DockerActionsModel) executeAction(action DockerAction) tea.Cmd {
+	if m.docker == nil {
+		m.running = false
+		m.message = "Docker indisponível"
+		m.messageType = "error"
+		return nil
+	}
+
 	m.running = true
 	m.message = ""
 	m.showLogs = false

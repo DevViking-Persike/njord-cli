@@ -1,10 +1,8 @@
 package components
 
 import (
-	"fmt"
 	"strings"
 
-	"github.com/DevViking-Persike/njord-cli/internal/config"
 	"github.com/DevViking-Persike/njord-cli/internal/theme"
 )
 
@@ -54,12 +52,4 @@ func RenderError(msg string) string {
 		return ""
 	}
 	return "\n  " + theme.ErrorStyle.Render(msg) + "\n"
-}
-
-// SaveConfig wraps config.Save with standard error/success message pattern.
-func SaveConfig(cfg *config.Config, path, successMsg string) (message, msgType string) {
-	if err := config.Save(cfg, path); err != nil {
-		return fmt.Sprintf("Erro ao salvar: %s", err), "error"
-	}
-	return successMsg, "ok"
 }

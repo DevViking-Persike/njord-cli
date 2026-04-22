@@ -25,6 +25,7 @@ type DockerModel struct {
 	configPath string
 	stacks     []config.DockerStack
 	statuses   map[int]docker.StackStatus
+	available  bool
 	cursor     int
 	goBack     bool
 	selected   *config.DockerStack
@@ -40,6 +41,7 @@ func NewDockerModel(cfg *config.Config, dockerClient *docker.Client, configPath 
 		configPath: configPath,
 		stacks:     cfg.DockerStacks,
 		statuses:   make(map[int]docker.StackStatus),
+		available:  dockerClient != nil,
 	}
 }
 
@@ -107,6 +109,8 @@ func (m DockerModel) View() string {
 			statusStr = theme.StatusRunning.Render("● " + status.Label)
 		case "◐":
 			statusStr = theme.StatusPartial.Render("◐ " + status.Label)
+		case "!":
+			statusStr = theme.WarningStyle.Render("! " + status.Label)
 		default:
 			statusStr = theme.StatusStopped.Render("○ " + status.Label)
 		}
@@ -139,6 +143,9 @@ func (m DockerModel) View() string {
 	}
 
 	b.WriteString("\n")
+	if !m.available {
+		b.WriteString(theme.WarningStyle.Render("  Docker indisponível: verifique o daemon e as permissões do socket.") + "\n\n")
+	}
 	b.WriteString(theme.HelpStyle.Render("  ↑↓ navigate  enter select  esc back"))
 
 	return b.String()
@@ -149,7 +156,7 @@ func (m *DockerModel) SetSize(w, h int) {
 	m.height = h
 }
 
-func (m *DockerModel) GoBack() bool       { return m.goBack }
+func (m *DockerModel) GoBack() bool        { return m.goBack }
 func (m *DockerModel) WantsAddStack() bool { return m.addStack }
 func (m *DockerModel) SelectedStack() *config.DockerStack {
 	return m.selected
@@ -164,6 +171,9 @@ func (m DockerModel) refreshStatuses() tea.Cmd {
 	return func() tea.Msg {
 		statuses := make(map[int]docker.StackStatus)
 		if dockerClient == nil {
+			for i := range stacks {
+				statuses[i] = docker.UnavailableStatus()
+			}
 			return stackStatusMsg{statuses: statuses}
 		}
 		for i, stack := range stacks {
