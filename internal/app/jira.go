@@ -60,6 +60,38 @@ func (s *JiraService) ListEpicChildren(epicKey string) ([]jira.Issue, error) {
 	return res.Issues, nil
 }
 
+// ListMyIssuesInProject returns the authenticated user's issues in a given
+// project, ordered by status then updated desc. Caller groups by status.
+// Empty projectKey is an error.
+func (s *JiraService) ListMyIssuesInProject(projectKey string) ([]jira.Issue, error) {
+	if projectKey == "" {
+		return nil, fmt.Errorf("listing project issues: projectKey is required")
+	}
+	jql := fmt.Sprintf(`project = %q AND assignee = currentUser() ORDER BY status ASC, updated DESC`, projectKey)
+	res, err := s.gw.SearchIssues(jql)
+	if err != nil {
+		return nil, fmt.Errorf("listing project issues: %w", err)
+	}
+	return res.Issues, nil
+}
+
+// GroupedByStatus groups issues by status name, preserving first-seen order.
+// Returns the ordered status list and the grouping map.
+func GroupedByStatus(issues []jira.Issue) (statuses []string, byStatus map[string][]jira.Issue) {
+	byStatus = make(map[string][]jira.Issue)
+	for _, iss := range issues {
+		status := iss.Status
+		if status == "" {
+			status = "Sem status"
+		}
+		if _, seen := byStatus[status]; !seen {
+			statuses = append(statuses, status)
+		}
+		byStatus[status] = append(byStatus[status], iss)
+	}
+	return statuses, byStatus
+}
+
 // ListSpaces returns all Jira projects (aka espaços) visible to the user,
 // sorted by name ascending. Returns empty slice when there is none.
 func (s *JiraService) ListSpaces() ([]jira.Project, error) {

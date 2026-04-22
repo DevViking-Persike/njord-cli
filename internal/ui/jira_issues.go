@@ -1,0 +1,194 @@
+package ui
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/DevViking-Persike/njord-cli/internal/app"
+	"github.com/DevViking-Persike/njord-cli/internal/jira"
+	"github.com/DevViking-Persike/njord-cli/internal/theme"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+)
+
+type jiraIssuesLoadedMsg struct {
+	issues []jira.Issue
+	err    error
+}
+
+// JiraIssuesLoader loads issues assigned to the user in a specific project.
+type JiraIssuesLoader interface {
+	ListMyIssuesInProject(projectKey string) ([]jira.Issue, error)
+}
+
+// JiraIssuesModel shows the user's issues in a project, grouped by status.
+type JiraIssuesModel struct {
+	loader       JiraIssuesLoader
+	projectKey   string
+	projectName  string
+	issues       []jira.Issue
+	statuses     []string
+	byStatus     map[string][]jira.Issue
+	loading      bool
+	loadErr      string
+	width        int
+	height       int
+	offset       int
+	goBack       bool
+}
+
+func NewJiraIssuesModel(loader JiraIssuesLoader, project jira.Project) JiraIssuesModel {
+	return JiraIssuesModel{
+		loader:      loader,
+		projectKey:  project.Key,
+		projectName: project.Name,
+		loading:     true,
+	}
+}
+
+func (m JiraIssuesModel) Init() tea.Cmd {
+	loader := m.loader
+	key := m.projectKey
+	return func() tea.Msg {
+		issues, err := loader.ListMyIssuesInProject(key)
+		return jiraIssuesLoadedMsg{issues: issues, err: err}
+	}
+}
+
+func (m JiraIssuesModel) Update(msg tea.Msg) (JiraIssuesModel, tea.Cmd) {
+	switch msg := msg.(type) {
+	case jiraIssuesLoadedMsg:
+		m.loading = false
+		if msg.err != nil {
+			m.loadErr = msg.err.Error()
+			return m, nil
+		}
+		m.issues = msg.issues
+		m.statuses, m.byStatus = app.GroupedByStatus(msg.issues)
+		return m, nil
+
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "esc", "q":
+			m.goBack = true
+		case "up", "k":
+			if m.offset > 0 {
+				m.offset--
+			}
+		case "down", "j":
+			if m.offset < m.maxOffset() {
+				m.offset++
+			}
+		case "pgup":
+			m.offset -= m.visibleLines()
+			if m.offset < 0 {
+				m.offset = 0
+			}
+		case "pgdown":
+			m.offset += m.visibleLines()
+			if m.offset > m.maxOffset() {
+				m.offset = m.maxOffset()
+			}
+		}
+	}
+	return m, nil
+}
+
+func (m JiraIssuesModel) View() string {
+	var b strings.Builder
+
+	b.WriteString(njordTitle() + "\n\n")
+	header := lipgloss.NewStyle().Bold(true).Foreground(theme.JiraBlue).
+		Render(fmt.Sprintf("  %s — Minhas issues", m.projectName))
+	divider := theme.DimStyle.Render("  " + strings.Repeat("─", 50))
+	b.WriteString(header + "\n" + divider + "\n\n")
+
+	if m.loading {
+		b.WriteString(theme.DimStyle.Render("  Carregando issues..."))
+		return b.String()
+	}
+	if m.loadErr != "" {
+		b.WriteString(theme.ErrorStyle.Render("  ✗ " + m.loadErr))
+		return b.String()
+	}
+	if len(m.issues) == 0 {
+		b.WriteString(theme.DimStyle.Render("  Nenhuma issue atribuída a você neste projeto."))
+		return b.String()
+	}
+
+	lines := m.buildLines()
+	visible := m.visibleLines()
+	end := m.offset + visible
+	if end > len(lines) {
+		end = len(lines)
+	}
+	for i := m.offset; i < end; i++ {
+		b.WriteString(lines[i] + "\n")
+	}
+
+	if len(lines) > visible {
+		b.WriteString(theme.DimStyle.Render(fmt.Sprintf("  [%d/%d]", m.offset+1, m.maxOffset()+1)))
+	}
+	return b.String()
+}
+
+// buildLines produces one line per issue and per status header, in display
+// order. Kept separate so scroll logic only tracks line indexes.
+func (m JiraIssuesModel) buildLines() []string {
+	var lines []string
+	countStyle := theme.DimStyle
+	statusStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.JiraBlueSel)
+
+	for i, status := range m.statuses {
+		issues := m.byStatus[status]
+		if i > 0 {
+			lines = append(lines, "")
+		}
+		lines = append(lines, statusStyle.Render("  "+status)+countStyle.Render(fmt.Sprintf("  (%d)", len(issues))))
+		for _, iss := range issues {
+			lines = append(lines, formatIssueLine(iss))
+		}
+	}
+	return lines
+}
+
+func formatIssueLine(iss jira.Issue) string {
+	keyStyle := lipgloss.NewStyle().Foreground(theme.JiraBlue)
+	typeStyle := theme.DimStyle
+	summary := iss.Summary
+	if len(summary) > 80 {
+		summary = summary[:77] + "..."
+	}
+	return fmt.Sprintf("    %s  %s  %s",
+		keyStyle.Render(iss.Key),
+		typeStyle.Render(fmt.Sprintf("[%s]", iss.Type)),
+		summary,
+	)
+}
+
+func (m JiraIssuesModel) visibleLines() int {
+	const chromeHeight = 8 // title + header + divider + help + padding
+	v := m.height - chromeHeight
+	if v < 3 {
+		return 3
+	}
+	return v
+}
+
+func (m JiraIssuesModel) maxOffset() int {
+	max := len(m.buildLines()) - m.visibleLines()
+	if max < 0 {
+		return 0
+	}
+	return max
+}
+
+func (m *JiraIssuesModel) SetSize(w, h int) {
+	m.width = w
+	m.height = h
+	if max := m.maxOffset(); m.offset > max {
+		m.offset = max
+	}
+}
+
+func (m *JiraIssuesModel) GoBack() bool { return m.goBack }

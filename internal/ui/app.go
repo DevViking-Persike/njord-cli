@@ -49,6 +49,7 @@ const (
 	ScreenGitLab
 	ScreenGitLabActions
 	ScreenJiraSpaces
+	ScreenJiraIssues
 )
 
 // Result is the final output from the TUI.
@@ -76,6 +77,7 @@ type AppModel struct {
 	gitlabScreen  GitLabModel
 	gitlabActions GitLabActionsModel
 	jiraSpaces    JiraSpacesModel
+	jiraIssues    JiraIssuesModel
 
 	// GitLab client (lazy init)
 	gitlabClient *gitlab.Client
@@ -124,6 +126,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.gitlabScreen.SetSize(msg.Width, msg.Height)
 		m.gitlabActions.SetSize(msg.Width, msg.Height)
 		m.jiraSpaces.SetSize(msg.Width, msg.Height)
+		m.jiraIssues.SetSize(msg.Width, msg.Height)
 		return m, nil
 
 	case gitlabInitMsg:
@@ -189,6 +192,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateGitLabActions(msg)
 	case ScreenJiraSpaces:
 		return m.updateJiraSpaces(msg)
+	case ScreenJiraIssues:
+		return m.updateJiraIssues(msg)
 	}
 
 	return m, nil
@@ -221,6 +226,8 @@ func (m AppModel) View() string {
 		content = m.gitlabActions.View()
 	case ScreenJiraSpaces:
 		content = m.jiraSpaces.View()
+	case ScreenJiraIssues:
+		content = m.jiraIssues.View()
 	}
 
 	help := theme.HelpStyle.Render("  ↑↓←→ navigate  enter select  esc back  q quit")
@@ -344,7 +351,22 @@ func (m AppModel) updateJiraSpaces(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if sel := m.jiraSpaces.Selected(); sel != nil {
 		m.jiraSpaces.ClearSelection()
-		// Por enquanto apenas limpa a seleção — próxima fase: drilldown pro espaço.
+		svc := app.NewJiraService(m.jiraClient)
+		m.jiraIssues = NewJiraIssuesModel(svc, *sel)
+		m.jiraIssues.SetSize(m.width, m.height)
+		m.screen = ScreenJiraIssues
+		return m, m.jiraIssues.Init()
+	}
+	return m, cmd
+}
+
+func (m AppModel) updateJiraIssues(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.jiraIssues, cmd = m.jiraIssues.Update(msg)
+
+	if m.jiraIssues.GoBack() {
+		m.screen = ScreenJiraSpaces
+		return m, nil
 	}
 	return m, cmd
 }

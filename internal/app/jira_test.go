@@ -138,6 +138,61 @@ func TestListSpaces_Error(t *testing.T) {
 	}
 }
 
+func TestListMyIssuesInProject_RequiresKey(t *testing.T) {
+	svc := NewJiraService(&fakeJiraGW{})
+	if _, err := svc.ListMyIssuesInProject(""); err == nil {
+		t.Error("expected error on empty projectKey")
+	}
+}
+
+func TestListMyIssuesInProject_JQL(t *testing.T) {
+	gw := &fakeJiraGW{searchRes: jira.SearchResult{Issues: []jira.Issue{{Key: "GAP-1"}}}}
+	svc := NewJiraService(gw)
+	got, err := svc.ListMyIssuesInProject("GAP")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Key != "GAP-1" {
+		t.Errorf("issues = %+v", got)
+	}
+	wantFragments := []string{`project = "GAP"`, "assignee = currentUser()", "ORDER BY status"}
+	for _, frag := range wantFragments {
+		if !strings.Contains(gw.lastJQL, frag) {
+			t.Errorf("JQL missing %q: %s", frag, gw.lastJQL)
+		}
+	}
+}
+
+func TestListMyIssuesInProject_PropagatesError(t *testing.T) {
+	gw := &fakeJiraGW{searchErr: errors.New("boom")}
+	svc := NewJiraService(gw)
+	if _, err := svc.ListMyIssuesInProject("GAP"); err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestGroupedByStatus(t *testing.T) {
+	issues := []jira.Issue{
+		{Key: "A-1", Status: "Desenvolvimento em 2.2"},
+		{Key: "A-2", Status: "Desenvolvimento em 2.1"},
+		{Key: "A-3", Status: "Desenvolvimento em 2.2"},
+		{Key: "A-4", Status: ""},
+	}
+	order, grouped := GroupedByStatus(issues)
+	if len(order) != 3 {
+		t.Fatalf("order = %v, want 3 groups", order)
+	}
+	if order[0] != "Desenvolvimento em 2.2" {
+		t.Errorf("first group = %q, want first-seen order", order[0])
+	}
+	if len(grouped["Desenvolvimento em 2.2"]) != 2 {
+		t.Errorf("expected 2 issues in 'Desenvolvimento em 2.2', got %d", len(grouped["Desenvolvimento em 2.2"]))
+	}
+	if len(grouped["Sem status"]) != 1 {
+		t.Errorf("expected 1 issue in 'Sem status' (empty status fallback)")
+	}
+}
+
 func TestCheckConnection_Error(t *testing.T) {
 	gw := &fakeJiraGW{userErr: errors.New("401")}
 	svc := NewJiraService(gw)
