@@ -33,6 +33,7 @@ type JiraSpacesModel struct {
 	cardWidth int
 	width     int
 	height    int
+	offset    int // first visible row (scroll position)
 	selected  *jira.Project
 	goBack    bool
 }
@@ -83,10 +84,12 @@ func (m JiraSpacesModel) handleKey(msg tea.KeyMsg) (JiraSpacesModel, tea.Cmd) {
 		if m.cursor >= m.cols {
 			m.cursor -= m.cols
 		}
+		m.ensureVisible()
 	case "down", "j":
 		if m.cursor+m.cols < len(m.projects) {
 			m.cursor += m.cols
 		}
+		m.ensureVisible()
 	case "left", "h":
 		if m.cursor%m.cols > 0 {
 			m.cursor--
@@ -130,13 +133,24 @@ func (m JiraSpacesModel) View() string {
 	}
 
 	b.WriteString(m.renderGrid())
+
+	rows := (len(m.projects) + m.cols - 1) / m.cols
+	visible := m.visibleRows()
+	if rows > visible {
+		b.WriteString(theme.DimStyle.Render(fmt.Sprintf("  [%d/%d]", m.offset+1, rows-visible+1)))
+	}
 	return b.String()
 }
 
 func (m JiraSpacesModel) renderGrid() string {
 	var rowBuf strings.Builder
 	rows := (len(m.projects) + m.cols - 1) / m.cols
-	for row := 0; row < rows; row++ {
+	visible := m.visibleRows()
+	end := m.offset + visible
+	if end > rows {
+		end = rows
+	}
+	for row := m.offset; row < end; row++ {
 		var cards []string
 		for col := 0; col < m.cols; col++ {
 			idx := row*m.cols + col
@@ -150,6 +164,30 @@ func (m JiraSpacesModel) renderGrid() string {
 		rowBuf.WriteString("\n")
 	}
 	return rowBuf.String()
+}
+
+// visibleRows returns how many card rows fit in the viewport after the
+// njord title, section header, divider, scroll indicator and app-level help.
+func (m JiraSpacesModel) visibleRows() int {
+	const cardHeight = 4
+	// Vertical chrome: njord title (2) + section+divider (3) + help (2) + slack (1)
+	const chromeHeight = 8
+	available := m.height - chromeHeight
+	if available < cardHeight {
+		return 1
+	}
+	return available / cardHeight
+}
+
+func (m *JiraSpacesModel) ensureVisible() {
+	row := m.cursor / m.cols
+	visible := m.visibleRows()
+	if row < m.offset {
+		m.offset = row
+	}
+	if row >= m.offset+visible {
+		m.offset = row - visible + 1
+	}
 }
 
 func (m JiraSpacesModel) renderCard(p jira.Project, selected bool) string {
@@ -170,6 +208,7 @@ func (m *JiraSpacesModel) SetSize(w, h int) {
 	if len(m.projects) > 0 && m.cursor >= len(m.projects) {
 		m.cursor = len(m.projects) - 1
 	}
+	m.ensureVisible()
 }
 
 func (m *JiraSpacesModel) recalcLayout() {
