@@ -51,9 +51,16 @@ func (g GitLabSettings) GitLabURL() string {
 	return "https://gitlab.com"
 }
 
+type JiraSettings struct {
+	Token string `koanf:"token" yaml:"token"`
+	URL   string `koanf:"url" yaml:"url,omitempty"`
+	Email string `koanf:"email" yaml:"email,omitempty"`
+}
+
 type Config struct {
 	Settings     Settings       `koanf:"settings" yaml:"settings"`
 	GitLab       GitLabSettings `koanf:"gitlab" yaml:"gitlab"`
+	Jira         JiraSettings   `koanf:"jira" yaml:"jira,omitempty"`
 	Categories   []Category     `koanf:"categories" yaml:"categories"`
 	DockerStacks []DockerStack  `koanf:"docker_stacks" yaml:"docker_stacks"`
 }
@@ -271,46 +278,3 @@ func GroupedProjects(projects []Project) (groups []string, byGroup map[string][]
 	return groups, byGroup
 }
 
-// marshalYAML produces a clean YAML output for the config.
-func marshalYAML(cfg *Config) ([]byte, error) {
-	var b strings.Builder
-
-	b.WriteString("settings:\n")
-	b.WriteString(fmt.Sprintf("  editor: %q\n", cfg.Settings.Editor))
-	b.WriteString(fmt.Sprintf("  projects_base: %q\n", cfg.Settings.ProjectsBase))
-	b.WriteString(fmt.Sprintf("  personal_base: %q\n", cfg.Settings.PersonalBase))
-
-	b.WriteString("\ngitlab:\n")
-	b.WriteString(fmt.Sprintf("  token: %q\n", cfg.GitLab.Token))
-	if cfg.GitLab.URL != "" {
-		b.WriteString(fmt.Sprintf("  url: %q\n", cfg.GitLab.URL))
-	}
-
-	b.WriteString("\ncategories:\n")
-	for _, cat := range cfg.Categories {
-		b.WriteString(fmt.Sprintf("  - id: %s\n", cat.ID))
-		b.WriteString(fmt.Sprintf("    name: %q\n", cat.Name))
-		b.WriteString(fmt.Sprintf("    sub: %q\n", cat.Sub))
-		b.WriteString("    projects:\n")
-		for _, p := range cat.Projects {
-			b.WriteString(fmt.Sprintf("      - alias: %s\n", p.Alias))
-			b.WriteString(fmt.Sprintf("        desc: %q\n", p.Desc))
-			b.WriteString(fmt.Sprintf("        path: %q\n", p.Path))
-			if p.Group != "" {
-				b.WriteString(fmt.Sprintf("        group: %q\n", p.Group))
-			}
-			if p.GitLabPath != "" {
-				b.WriteString(fmt.Sprintf("        gitlab_path: %q\n", p.GitLabPath))
-			}
-		}
-	}
-
-	b.WriteString("\ndocker_stacks:\n")
-	for _, s := range cfg.DockerStacks {
-		b.WriteString(fmt.Sprintf("  - name: %q\n", s.Name))
-		b.WriteString(fmt.Sprintf("    desc: %q\n", s.Desc))
-		b.WriteString(fmt.Sprintf("    path: %q\n", s.Path))
-	}
-
-	return []byte(b.String()), nil
-}
