@@ -11,6 +11,7 @@ import (
 	"github.com/DevViking-Persike/njord-cli/internal/gitlabclient"
 	"github.com/DevViking-Persike/njord-cli/internal/jiraclient"
 	"github.com/DevViking-Persike/njord-cli/internal/theme"
+	"github.com/DevViking-Persike/njord-cli/internal/ui/shared"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -587,7 +588,7 @@ func fetchRecentPushes(client *gitlabclient.Client, cfg *config.Config) tea.Cmd 
 
 			result = append(result, RecentPushAlias{
 				Alias:    alias,
-				Ago:      timeAgo(push.CreatedAt),
+				Ago:      shared.TimeAgo(push.CreatedAt),
 				Approval: approvalIcon,
 			})
 		}
@@ -635,7 +636,7 @@ func fetchPendingMRs(client *gitlabclient.Client, cfg *config.Config) tea.Cmd {
 				Alias:    alias,
 				IID:      mr.IID,
 				Title:    mr.Title,
-				Ago:      timeAgo(mr.CreatedAt),
+				Ago:      shared.TimeAgo(mr.CreatedAt),
 				Approval: approvalIcon,
 			})
 		}

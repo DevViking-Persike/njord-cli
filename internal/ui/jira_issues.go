@@ -7,6 +7,7 @@ import (
 	"github.com/DevViking-Persike/njord-cli/internal/app/jira"
 	"github.com/DevViking-Persike/njord-cli/internal/jiraclient"
 	"github.com/DevViking-Persike/njord-cli/internal/theme"
+	"github.com/DevViking-Persike/njord-cli/internal/ui/shared"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -97,7 +98,7 @@ func (m JiraIssuesModel) Update(msg tea.Msg) (JiraIssuesModel, tea.Cmd) {
 func (m JiraIssuesModel) View() string {
 	var b strings.Builder
 
-	b.WriteString(njordTitle() + "\n\n")
+	b.WriteString(shared.NjordTitle() + "\n\n")
 	header := lipgloss.NewStyle().Bold(true).Foreground(theme.JiraBlue).
 		Render(fmt.Sprintf("  %s — Minhas issues", m.projectName))
 	divider := theme.DimStyle.Render("  " + strings.Repeat("─", 50))

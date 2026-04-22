@@ -6,6 +6,7 @@ import (
 
 	"github.com/DevViking-Persike/njord-cli/internal/jiraclient"
 	"github.com/DevViking-Persike/njord-cli/internal/theme"
+	"github.com/DevViking-Persike/njord-cli/internal/ui/shared"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -112,7 +113,7 @@ func (m JiraSpacesModel) handleKey(msg tea.KeyMsg) (JiraSpacesModel, tea.Cmd) {
 func (m JiraSpacesModel) View() string {
 	var b strings.Builder
 
-	b.WriteString(njordTitle() + "\n\n")
+	b.WriteString(shared.NjordTitle() + "\n\n")
 	section := lipgloss.NewStyle().Bold(true).Foreground(theme.JiraBlue).Render("  Jira — Espaços")
 	divider := theme.DimStyle.Render("  " + strings.Repeat("─", 50))
 	b.WriteString(section + "\n" + divider + "\n\n")
@@ -155,7 +156,7 @@ func (m JiraSpacesModel) renderGrid() string {
 		for col := 0; col < m.cols; col++ {
 			idx := row*m.cols + col
 			if idx >= len(m.projects) {
-				cards = append(cards, strings.Repeat(" ", m.cardWidth+borderOverhead))
+				cards = append(cards, strings.Repeat(" ", m.cardWidth+shared.BorderOverhead))
 				continue
 			}
 			cards = append(cards, m.renderCard(m.projects[idx], idx == m.cursor))
@@ -215,7 +216,7 @@ func (m *JiraSpacesModel) recalcLayout() {
 	if m.width <= 0 {
 		return
 	}
-	maxCols := m.width / (minCardWidth + borderOverhead)
+	maxCols := m.width / (shared.MinCardWidth + shared.BorderOverhead)
 	if maxCols < 1 {
 		maxCols = 1
 	}
@@ -223,7 +224,7 @@ func (m *JiraSpacesModel) recalcLayout() {
 		maxCols = 5
 	}
 	m.cols = maxCols
-	m.cardWidth = (m.width / m.cols) - borderOverhead
+	m.cardWidth = (m.width / m.cols) - shared.BorderOverhead
 }
 
 // GoBack reports whether the user pressed esc/q.

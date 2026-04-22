@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/DevViking-Persike/njord-cli/internal/theme"
+	"github.com/DevViking-Persike/njord-cli/internal/ui/shared"
 	"github.com/DevViking-Persike/njord-cli/internal/ui/components"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -44,7 +45,7 @@ func (m GitLabActionsModel) viewMRList() string {
 			b.WriteString("  " + title + "\n")
 
 			branchInfo := theme.DimStyle.Render(fmt.Sprintf("     %s → %s  por %s  %s",
-				mr.Branch, mr.Target, mr.Author, timeAgo(mr.CreatedAt)))
+				mr.Branch, mr.Target, mr.Author, shared.TimeAgo(mr.CreatedAt)))
 			b.WriteString("  " + branchInfo + "\n")
 		}
 		components.RenderScrollDown(&b, end, len(m.mrs))
@@ -87,7 +88,7 @@ func (m GitLabActionsModel) viewPipelineList() string {
 			ps := pipelineStateStyle(p.Status)
 			statusTag := ps.Render("⬤ " + p.Status)
 
-			line := fmt.Sprintf("#%d  %s  ref: %s  %s", p.ID, statusTag, p.Ref, timeAgo(p.CreatedAt))
+			line := fmt.Sprintf("#%d  %s  ref: %s  %s", p.ID, statusTag, p.Ref, shared.TimeAgo(p.CreatedAt))
 			if i == m.cursor {
 				b.WriteString("  " + theme.GitLabTitleSelectedStyle.Render(prefix) + line + "\n")
 			} else {

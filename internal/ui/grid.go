@@ -6,6 +6,7 @@ import (
 
 	"github.com/DevViking-Persike/njord-cli/internal/config"
 	"github.com/DevViking-Persike/njord-cli/internal/theme"
+	"github.com/DevViking-Persike/njord-cli/internal/ui/shared"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -20,13 +21,6 @@ const (
 	GridItemAdd
 	GridItemSettings
 )
-
-const (
-	minCardWidth   = 30 // minimum card content width (without borders)
-	borderOverhead = 2  // left + right borders
-)
-
-// njordTitle is rendered at runtime with styles, not as const art
 
 // RecentPushAlias holds alias + time + approval info for display
 type RecentPushAlias struct {
@@ -194,7 +188,7 @@ func (m GridModel) View() string {
 	var b strings.Builder
 
 	// Header: [Aprovações recentes] [MRs pendentes] ᚾ N J O R D
-	title := njordTitle()
+	title := shared.NjordTitle()
 
 	hasData := len(m.recentPushes) > 0 || len(m.pendingMRs) > 0 || m.pushError != "" || m.mrsError != ""
 
@@ -221,7 +215,7 @@ func (m GridModel) View() string {
 			idx := row*m.cols + col
 			if idx >= len(m.items) {
 				// Empty cell
-				rowCards = append(rowCards, strings.Repeat(" ", m.cardWidth+borderOverhead))
+				rowCards = append(rowCards, strings.Repeat(" ", m.cardWidth+shared.BorderOverhead))
 				continue
 			}
 			item := m.items[idx]
@@ -310,7 +304,7 @@ func (m *GridModel) recalcLayout() {
 		return
 	}
 
-	maxCols := m.width / (minCardWidth + borderOverhead)
+	maxCols := m.width / (shared.MinCardWidth + shared.BorderOverhead)
 	if maxCols < 1 {
 		maxCols = 1
 	}
@@ -322,7 +316,7 @@ func (m *GridModel) recalcLayout() {
 	}
 
 	m.cols = maxCols
-	m.cardWidth = (m.width / m.cols) - borderOverhead
+	m.cardWidth = (m.width / m.cols) - shared.BorderOverhead
 }
 
 func (m *GridModel) Selected() *GridSelection {
@@ -428,12 +422,11 @@ func (m GridModel) renderCard(item GridItem, selected bool) string {
 
 func (m GridModel) visibleRows() int {
 	// Header ~3 lines (title + blank), help ~2 lines
-	cardHeight := 6
 	available := m.height - 7
-	if available < cardHeight {
+	if available < shared.CardHeight {
 		return 1
 	}
-	return available / cardHeight
+	return available / shared.CardHeight
 }
 
 func (m *GridModel) ensureVisible() {

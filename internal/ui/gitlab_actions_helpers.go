@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os/exec"
 	"runtime"
-	"time"
 
 	"github.com/DevViking-Persike/njord-cli/internal/gitlabclient"
 	"github.com/DevViking-Persike/njord-cli/internal/theme"
+	"github.com/DevViking-Persike/njord-cli/internal/ui/shared"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -70,7 +70,7 @@ func (m GitLabActionsModel) renderBranchLine(i int) string {
 
 	ago := ""
 	if !branch.CommitDate.IsZero() {
-		ago = " " + theme.DimStyle.Render(timeAgo(branch.CommitDate))
+		ago = " " + theme.DimStyle.Render(shared.TimeAgo(branch.CommitDate))
 	}
 
 	return "  " + namePart + tags + approvalTag + ago + "\n"
@@ -106,20 +106,3 @@ func openBrowser(url string) {
 	}
 }
 
-func timeAgo(t time.Time) string {
-	d := time.Since(t)
-	switch {
-	case d < time.Minute:
-		return "agora"
-	case d < time.Hour:
-		return fmt.Sprintf("%dm atrás", int(d.Minutes()))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh atrás", int(d.Hours()))
-	default:
-		days := int(d.Hours() / 24)
-		if days == 1 {
-			return "ontem"
-		}
-		return fmt.Sprintf("%dd atrás", days)
-	}
-}
