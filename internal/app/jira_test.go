@@ -9,12 +9,14 @@ import (
 )
 
 type fakeJiraGW struct {
-	user       jira.User
-	userErr    error
-	searchRes  jira.SearchResult
-	searchErr  error
-	lastJQL    string
-	callCount  int
+	user        jira.User
+	userErr     error
+	searchRes   jira.SearchResult
+	searchErr   error
+	projects    []jira.Project
+	projectsErr error
+	lastJQL     string
+	callCount   int
 }
 
 func (f *fakeJiraGW) CurrentUser() (jira.User, error) {
@@ -26,6 +28,11 @@ func (f *fakeJiraGW) SearchIssues(jql string) (jira.SearchResult, error) {
 	f.lastJQL = jql
 	f.callCount++
 	return f.searchRes, f.searchErr
+}
+
+func (f *fakeJiraGW) ListProjects() ([]jira.Project, error) {
+	f.callCount++
+	return f.projects, f.projectsErr
 }
 
 func TestListMyOpenIssues_UsesExpectedJQL(t *testing.T) {
@@ -105,6 +112,29 @@ func TestCheckConnection_Success(t *testing.T) {
 	}
 	if u.DisplayName != "V" {
 		t.Errorf("user = %+v", u)
+	}
+}
+
+func TestListSpaces_ReturnsAll(t *testing.T) {
+	gw := &fakeJiraGW{projects: []jira.Project{
+		{Key: "GAP", Name: "Squad GAP"},
+		{Key: "BILL", Name: "Squad Billing"},
+	}}
+	svc := NewJiraService(gw)
+	got, err := svc.ListSpaces()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Key != "GAP" || got[1].Name != "Squad Billing" {
+		t.Errorf("got = %+v", got)
+	}
+}
+
+func TestListSpaces_Error(t *testing.T) {
+	gw := &fakeJiraGW{projectsErr: errors.New("boom")}
+	svc := NewJiraService(gw)
+	if _, err := svc.ListSpaces(); err == nil || !strings.Contains(err.Error(), "boom") {
+		t.Errorf("expected wrapped error, got %v", err)
 	}
 }
 

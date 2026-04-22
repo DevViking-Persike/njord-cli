@@ -24,3 +24,10 @@ type SearchResult struct {
 	IsLast     bool
 	NextCursor string
 }
+
+// Project is a Jira project (aka "espaço" for the user — Squad GAP, Squad Billing).
+type Project struct {
+	Key  string // short identifier, used in issue keys (e.g. GAP-123)
+	Name string // display name (e.g. "Squad GAP")
+	ID   string
+}

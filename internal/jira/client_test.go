@@ -212,6 +212,68 @@ func TestSearchIssues_HTTPError(t *testing.T) {
 	}
 }
 
+func TestListProjects_SinglePage(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("startAt") != "0" {
+			t.Errorf("startAt = %q, want 0", r.URL.Query().Get("startAt"))
+		}
+		fmt.Fprint(w, `{"isLast": true, "values": [
+			{"id":"1","key":"GAP","name":"Squad GAP"},
+			{"id":"2","key":"BILL","name":"Squad Billing"}
+		]}`)
+	}))
+	defer srv.Close()
+
+	c, _ := NewClient(srv.URL, "v@a", "t", WithHTTPClient(srv.Client()))
+	projects, err := c.ListProjects()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(projects) != 2 {
+		t.Fatalf("len = %d, want 2", len(projects))
+	}
+	if projects[0].Key != "GAP" || projects[1].Name != "Squad Billing" {
+		t.Errorf("projects = %+v", projects)
+	}
+}
+
+func TestListProjects_Paginates(t *testing.T) {
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			fmt.Fprint(w, `{"isLast": false, "values": [{"id":"1","key":"A","name":"A"}]}`)
+			return
+		}
+		fmt.Fprint(w, `{"isLast": true, "values": [{"id":"2","key":"B","name":"B"}]}`)
+	}))
+	defer srv.Close()
+
+	c, _ := NewClient(srv.URL, "v@a", "t", WithHTTPClient(srv.Client()))
+	projects, err := c.ListProjects()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != 2 {
+		t.Errorf("expected 2 API calls, got %d", calls)
+	}
+	if len(projects) != 2 {
+		t.Errorf("len = %d, want 2", len(projects))
+	}
+}
+
+func TestListProjects_HTTPError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+	}))
+	defer srv.Close()
+
+	c, _ := NewClient(srv.URL, "v@a", "t", WithHTTPClient(srv.Client()))
+	if _, err := c.ListProjects(); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 func TestSearchIssues_DecodeError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `not-json`)

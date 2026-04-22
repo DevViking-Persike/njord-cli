@@ -30,6 +30,9 @@ var (
 	GitLabOrange    = lipgloss.Color("#fc6d26")
 	GitLabOrangeSel = lipgloss.Color("#fca326")
 	GitLabBgSel     = lipgloss.Color("#4e2800")
+	JiraBlue        = lipgloss.Color("#0052cc")
+	JiraBlueSel     = lipgloss.Color("#4c9aff")
+	JiraBgSel       = lipgloss.Color("#0a2540")
 
 	MROpen   = lipgloss.Color("#2da44e")
 	MRMerged = lipgloss.Color("#6e7dd6")
@@ -192,6 +195,27 @@ var (
 	GitLabTitleSelectedStyle = lipgloss.NewStyle().
 				Bold(true).
 				Foreground(GitLabOrangeSel)
+
+	JiraCardStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(JiraBlue).
+			Padding(0, 1).
+			Width(36)
+
+	JiraCardSelectedStyle = lipgloss.NewStyle().
+				Border(lipgloss.DoubleBorder()).
+				BorderForeground(JiraBlueSel).
+				Padding(0, 1).
+				Width(36).
+				Background(JiraBgSel)
+
+	JiraTitleStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(JiraBlue)
+
+	JiraTitleSelectedStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(JiraBlueSel)
 
 	MROpenStyle = lipgloss.NewStyle().
 			Foreground(MROpen)

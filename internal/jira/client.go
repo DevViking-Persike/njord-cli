@@ -66,6 +66,33 @@ func (c *Client) CurrentUser() (User, error) {
 	return User(raw), nil
 }
 
+// ListProjects returns projects visible to the authenticated user, paginated
+// server-side. Fetches up to 200 projects (4 pages of 50) — enough for any
+// realistic workspace; stops early when the server signals the last page.
+func (c *Client) ListProjects() ([]Project, error) {
+	var all []Project
+	startAt := 0
+	for page := 0; page < 4; page++ {
+		q := url.Values{}
+		q.Set("maxResults", "50")
+		q.Set("startAt", fmt.Sprintf("%d", startAt))
+		q.Set("orderBy", "name")
+
+		var raw projectSearchResponse
+		if err := c.getJSON("/rest/api/3/project/search", q, &raw); err != nil {
+			return nil, err
+		}
+		for _, p := range raw.Values {
+			all = append(all, Project{Key: p.Key, Name: p.Name, ID: p.ID})
+		}
+		if raw.IsLast || len(raw.Values) == 0 {
+			break
+		}
+		startAt += len(raw.Values)
+	}
+	return all, nil
+}
+
 // SearchIssues runs a JQL query and returns the first page (up to 50 issues).
 func (c *Client) SearchIssues(jql string) (SearchResult, error) {
 	q := url.Values{}
@@ -91,6 +118,15 @@ func (c *Client) SearchIssues(jql string) (SearchResult, error) {
 }
 
 // --- internals ---
+
+type projectSearchResponse struct {
+	Values []struct {
+		ID   string `json:"id"`
+		Key  string `json:"key"`
+		Name string `json:"name"`
+	} `json:"values"`
+	IsLast bool `json:"isLast"`
+}
 
 type searchResponse struct {
 	Issues        []rawIssue `json:"issues"`

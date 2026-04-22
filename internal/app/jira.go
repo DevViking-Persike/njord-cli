@@ -12,6 +12,7 @@ import (
 type JiraGateway interface {
 	CurrentUser() (jira.User, error)
 	SearchIssues(jql string) (jira.SearchResult, error)
+	ListProjects() ([]jira.Project, error)
 }
 
 // JiraService composes use cases for tasks, stories and epics.
@@ -57,6 +58,16 @@ func (s *JiraService) ListEpicChildren(epicKey string) ([]jira.Issue, error) {
 		return nil, fmt.Errorf("listing epic children: %w", err)
 	}
 	return res.Issues, nil
+}
+
+// ListSpaces returns all Jira projects (aka espaços) visible to the user,
+// sorted by name ascending. Returns empty slice when there is none.
+func (s *JiraService) ListSpaces() ([]jira.Project, error) {
+	projects, err := s.gw.ListProjects()
+	if err != nil {
+		return nil, fmt.Errorf("listing jira spaces: %w", err)
+	}
+	return projects, nil
 }
 
 // CheckConnection verifies credentials by hitting /myself.

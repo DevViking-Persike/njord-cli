@@ -16,6 +16,7 @@ const (
 	GridItemCategory GridItemType = iota
 	GridItemDocker
 	GridItemGitLab
+	GridItemJira
 	GridItemAdd
 	GridItemSettings
 )
@@ -109,6 +110,15 @@ func NewGridModel(cfg *config.Config) GridModel {
 		Sub:   "MRs, Pipelines, Branches",
 		Count: cfg.GitLabProjectCount(),
 	})
+
+	// Jira card
+	if cfg.Jira.Token != "" && cfg.Jira.URL != "" {
+		items = append(items, GridItem{
+			Type: GridItemJira,
+			Name: "Jira",
+			Sub:  "Espaços, Tasks, Epics",
+		})
+	}
 
 	// Add card
 	items = append(items, GridItem{
@@ -353,6 +363,18 @@ func (m GridModel) renderCard(item GridItem, selected bool) string {
 			subStyle = theme.SubStyle
 			countStyle = theme.CountStyle
 		}
+	case GridItemJira:
+		if selected {
+			cardStyle = theme.JiraCardSelectedStyle
+			titleStyle = theme.JiraTitleSelectedStyle
+			subStyle = theme.SubSelectedStyle
+			countStyle = theme.CountSelectedStyle
+		} else {
+			cardStyle = theme.JiraCardStyle
+			titleStyle = theme.JiraTitleStyle
+			subStyle = theme.SubStyle
+			countStyle = theme.CountStyle
+		}
 	case GridItemAdd:
 		if selected {
 			cardStyle = theme.AddCardSelectedStyle
@@ -395,7 +417,7 @@ func (m GridModel) renderCard(item GridItem, selected bool) string {
 	sub := subStyle.Render(item.Sub)
 
 	var count string
-	if item.Type == GridItemAdd || item.Type == GridItemSettings {
+	if item.Type == GridItemAdd || item.Type == GridItemSettings || item.Type == GridItemJira {
 		count = ""
 	} else {
 		count = countStyle.Render(fmt.Sprintf("%d projetos", item.Count))

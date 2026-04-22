@@ -8,6 +8,7 @@ import (
 	"github.com/DevViking-Persike/njord-cli/internal/config"
 	"github.com/DevViking-Persike/njord-cli/internal/docker"
 	"github.com/DevViking-Persike/njord-cli/internal/gitlab"
+	"github.com/DevViking-Persike/njord-cli/internal/jira"
 	"github.com/DevViking-Persike/njord-cli/internal/theme"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -47,6 +48,7 @@ const (
 	ScreenSettings
 	ScreenGitLab
 	ScreenGitLabActions
+	ScreenJiraSpaces
 )
 
 // Result is the final output from the TUI.
@@ -73,9 +75,13 @@ type AppModel struct {
 	settings      SettingsModel
 	gitlabScreen  GitLabModel
 	gitlabActions GitLabActionsModel
+	jiraSpaces    JiraSpacesModel
 
 	// GitLab client (lazy init)
 	gitlabClient *gitlab.Client
+
+	// Jira client (lazy init)
+	jiraClient *jira.Client
 
 	// Context for transitions
 	selectedCatID string
@@ -117,6 +123,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.settings.SetSize(msg.Width, msg.Height)
 		m.gitlabScreen.SetSize(msg.Width, msg.Height)
 		m.gitlabActions.SetSize(msg.Width, msg.Height)
+		m.jiraSpaces.SetSize(msg.Width, msg.Height)
 		return m, nil
 
 	case gitlabInitMsg:
@@ -180,6 +187,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateGitLab(msg)
 	case ScreenGitLabActions:
 		return m.updateGitLabActions(msg)
+	case ScreenJiraSpaces:
+		return m.updateJiraSpaces(msg)
 	}
 
 	return m, nil
@@ -210,6 +219,8 @@ func (m AppModel) View() string {
 		content = m.gitlabScreen.View()
 	case ScreenGitLabActions:
 		content = m.gitlabActions.View()
+	case ScreenJiraSpaces:
+		content = m.jiraSpaces.View()
 	}
 
 	help := theme.HelpStyle.Render("  ↑↓←→ navigate  enter select  esc back  q quit")
@@ -303,9 +314,38 @@ func (m AppModel) updateGrid(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.settings.SetSize(m.width, m.height)
 			m.screen = ScreenSettings
 			return m, m.settings.Init()
+
+		case GridItemJira:
+			if m.jiraClient == nil {
+				client, err := jira.NewClient(m.config.Jira.URL, m.config.Jira.Email, m.config.Jira.Token)
+				if err != nil {
+					return m, nil
+				}
+				m.jiraClient = client
+			}
+			svc := app.NewJiraService(m.jiraClient)
+			m.jiraSpaces = NewJiraSpacesModel(svc)
+			m.jiraSpaces.SetSize(m.width, m.height)
+			m.screen = ScreenJiraSpaces
+			return m, m.jiraSpaces.Init()
 		}
 	}
 
+	return m, cmd
+}
+
+func (m AppModel) updateJiraSpaces(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.jiraSpaces, cmd = m.jiraSpaces.Update(msg)
+
+	if m.jiraSpaces.GoBack() {
+		m.screen = ScreenGrid
+		return m, nil
+	}
+	if sel := m.jiraSpaces.Selected(); sel != nil {
+		m.jiraSpaces.ClearSelection()
+		// Por enquanto apenas limpa a seleção — próxima fase: drilldown pro espaço.
+	}
 	return m, cmd
 }
 

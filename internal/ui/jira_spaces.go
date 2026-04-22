@@ -1,0 +1,196 @@
+package ui
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/DevViking-Persike/njord-cli/internal/jira"
+	"github.com/DevViking-Persike/njord-cli/internal/theme"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+)
+
+// jiraSpacesLoadedMsg carries the async result of listing Jira projects.
+type jiraSpacesLoadedMsg struct {
+	projects []jira.Project
+	err      error
+}
+
+// JiraSpacesLoader is the minimum surface for loading Jira spaces.
+// Kept as an interface so the UI never depends directly on internal/app.
+type JiraSpacesLoader interface {
+	ListSpaces() ([]jira.Project, error)
+}
+
+// JiraSpacesModel renders a grid of Jira projects (espaços).
+type JiraSpacesModel struct {
+	loader    JiraSpacesLoader
+	projects  []jira.Project
+	loading   bool
+	loadErr   string
+	cursor    int
+	cols      int
+	cardWidth int
+	width     int
+	height    int
+	selected  *jira.Project
+	goBack    bool
+}
+
+func NewJiraSpacesModel(loader JiraSpacesLoader) JiraSpacesModel {
+	return JiraSpacesModel{
+		loader:    loader,
+		loading:   true,
+		cols:      2,
+		cardWidth: 36,
+	}
+}
+
+func (m JiraSpacesModel) Init() tea.Cmd {
+	loader := m.loader
+	return func() tea.Msg {
+		projects, err := loader.ListSpaces()
+		return jiraSpacesLoadedMsg{projects: projects, err: err}
+	}
+}
+
+func (m JiraSpacesModel) Update(msg tea.Msg) (JiraSpacesModel, tea.Cmd) {
+	switch msg := msg.(type) {
+	case jiraSpacesLoadedMsg:
+		m.loading = false
+		if msg.err != nil {
+			m.loadErr = msg.err.Error()
+			return m, nil
+		}
+		m.projects = msg.projects
+		return m, nil
+
+	case tea.KeyMsg:
+		if m.loading {
+			if msg.String() == "esc" || msg.String() == "q" {
+				m.goBack = true
+			}
+			return m, nil
+		}
+		return m.handleKey(msg)
+	}
+	return m, nil
+}
+
+func (m JiraSpacesModel) handleKey(msg tea.KeyMsg) (JiraSpacesModel, tea.Cmd) {
+	switch msg.String() {
+	case "up", "k":
+		if m.cursor >= m.cols {
+			m.cursor -= m.cols
+		}
+	case "down", "j":
+		if m.cursor+m.cols < len(m.projects) {
+			m.cursor += m.cols
+		}
+	case "left", "h":
+		if m.cursor%m.cols > 0 {
+			m.cursor--
+		}
+	case "right", "l":
+		if m.cursor%m.cols < m.cols-1 && m.cursor+1 < len(m.projects) {
+			m.cursor++
+		}
+	case "enter":
+		if m.cursor < len(m.projects) {
+			p := m.projects[m.cursor]
+			m.selected = &p
+		}
+	case "esc", "q":
+		m.goBack = true
+	}
+	return m, nil
+}
+
+func (m JiraSpacesModel) View() string {
+	var b strings.Builder
+
+	header := lipgloss.NewStyle().Bold(true).Foreground(theme.Title).Render("  Jira — Espaços")
+	divider := theme.DimStyle.Render("  " + strings.Repeat("─", 50))
+	b.WriteString("\n" + header + "\n" + divider + "\n\n")
+
+	if m.loading {
+		b.WriteString(theme.DimStyle.Render("  Carregando projetos do Jira..."))
+		return b.String()
+	}
+	if m.loadErr != "" {
+		b.WriteString(theme.ErrorStyle.Render("  ✗ " + m.loadErr))
+		b.WriteString("\n\n" + theme.HelpStyle.Render("  esc back"))
+		return b.String()
+	}
+	if len(m.projects) == 0 {
+		b.WriteString(theme.DimStyle.Render("  Nenhum projeto encontrado."))
+		b.WriteString("\n\n" + theme.HelpStyle.Render("  esc back"))
+		return b.String()
+	}
+
+	b.WriteString(m.renderGrid())
+	return b.String()
+}
+
+func (m JiraSpacesModel) renderGrid() string {
+	var rowBuf strings.Builder
+	rows := (len(m.projects) + m.cols - 1) / m.cols
+	for row := 0; row < rows; row++ {
+		var cards []string
+		for col := 0; col < m.cols; col++ {
+			idx := row*m.cols + col
+			if idx >= len(m.projects) {
+				cards = append(cards, strings.Repeat(" ", m.cardWidth+borderOverhead))
+				continue
+			}
+			cards = append(cards, m.renderCard(m.projects[idx], idx == m.cursor))
+		}
+		rowBuf.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, cards...))
+		rowBuf.WriteString("\n")
+	}
+	return rowBuf.String()
+}
+
+func (m JiraSpacesModel) renderCard(p jira.Project, selected bool) string {
+	cardStyle, titleStyle, subStyle := theme.CardStyle, theme.TitleStyle, theme.SubStyle
+	if selected {
+		cardStyle, titleStyle, subStyle = theme.CardSelectedStyle, theme.TitleSelectedStyle, theme.SubSelectedStyle
+	}
+	name := titleStyle.Render(p.Name)
+	key := subStyle.Render(fmt.Sprintf("key: %s", p.Key))
+	content := lipgloss.JoinVertical(lipgloss.Left, name, key)
+	return cardStyle.Width(m.cardWidth).Render(content)
+}
+
+func (m *JiraSpacesModel) SetSize(w, h int) {
+	m.width = w
+	m.height = h
+	m.recalcLayout()
+	if len(m.projects) > 0 && m.cursor >= len(m.projects) {
+		m.cursor = len(m.projects) - 1
+	}
+}
+
+func (m *JiraSpacesModel) recalcLayout() {
+	if m.width <= 0 {
+		return
+	}
+	maxCols := m.width / (minCardWidth + borderOverhead)
+	if maxCols < 1 {
+		maxCols = 1
+	}
+	if maxCols > 5 {
+		maxCols = 5
+	}
+	m.cols = maxCols
+	m.cardWidth = (m.width / m.cols) - borderOverhead
+}
+
+// GoBack reports whether the user pressed esc/q.
+func (m *JiraSpacesModel) GoBack() bool { return m.goBack }
+
+// Selected returns the project the user picked, or nil.
+func (m *JiraSpacesModel) Selected() *jira.Project { return m.selected }
+
+// ClearSelection clears the picked project.
+func (m *JiraSpacesModel) ClearSelection() { m.selected = nil }
