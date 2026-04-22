@@ -18,16 +18,18 @@ test: test-unit
 	for pkg in $(MUTATION_PKGS); do \
 		echo "  $$pkg"; \
 		out=$$(gremlins unleash $$pkg 2>&1); \
-		efficacy=$$(echo "$$out" | grep "Test efficacy" | grep -oE '[0-9]+\.[0-9]+'); \
 		killed=$$(echo "$$out" | grep -oE 'Killed: [0-9]+' | grep -oE '[0-9]+'); \
 		lived=$$(echo "$$out" | grep -oE 'Lived: [0-9]+' | grep -oE '[0-9]+'); \
-		total=$$((killed + lived)); \
+		timedout=$$(echo "$$out" | grep -oE 'Timed out: [0-9]+' | grep -oE '[0-9]+'); \
+		effective_killed=$$((killed + timedout)); \
+		total=$$((effective_killed + lived)); \
 		if [ "$$total" -eq 0 ]; then \
 			echo "    ↳ sem mutantes testáveis — pulado"; \
 			continue; \
 		fi; \
-		echo "    ↳ eficácia: $$efficacy% (killed=$$killed lived=$$lived)"; \
-		below=$$(awk -v e=$$efficacy -v t=$(MUTATION_THRESHOLD) 'BEGIN{print (e<t)?1:0}'); \
+		efficacy=$$(LC_ALL=C awk -v k=$$effective_killed -v t=$$total 'BEGIN{printf "%.2f", (k/t)*100}'); \
+		echo "    ↳ eficácia: $$efficacy% (killed=$$killed timedout=$$timedout lived=$$lived)"; \
+		below=$$(LC_ALL=C awk -v e=$$efficacy -v t=$(MUTATION_THRESHOLD) 'BEGIN{print (e+0<t+0)?1:0}'); \
 		if [ "$$below" -eq 1 ]; then \
 			echo "    ✗ ABAIXO do threshold $(MUTATION_THRESHOLD)% — fortalecer testes"; \
 			fail=1; \

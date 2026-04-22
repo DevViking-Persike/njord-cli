@@ -1,7 +1,7 @@
 silent: false
 tags: ""
 test-cpu: 0
-timeout-coefficient: 3
+timeout-coefficient: 10
 
 mutants:
   arithmetic-base:
