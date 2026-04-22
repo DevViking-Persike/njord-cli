@@ -1,12 +1,46 @@
-.PHONY: build test test-verbose coverage coverage-html mutation mutation-docker clean
+.PHONY: build test test-unit test-verbose coverage coverage-html mutation mutation-docker mutation-app clean
 
 BINARY := njord
 PKG := ./...
+MUTATION_PKGS := ./internal/app/ ./internal/docker/ ./internal/config/
 
 build:
 	go build -o $(BINARY) ./cmd/njord/
 
-test:
+# test: roda unit tests + mutation testing (threshold 84%)
+# Se a eficácia cair abaixo de 84%, bloqueia (exit != 0).
+# Pacotes sem mutantes Killed+Lived são ignorados (não há o que medir).
+MUTATION_THRESHOLD := 84
+
+test: test-unit
+	@echo "→ Mutation testing (threshold eficácia=$(MUTATION_THRESHOLD)%)"
+	@fail=0; \
+	for pkg in $(MUTATION_PKGS); do \
+		echo "  $$pkg"; \
+		out=$$(gremlins unleash $$pkg 2>&1); \
+		efficacy=$$(echo "$$out" | grep "Test efficacy" | grep -oE '[0-9]+\.[0-9]+'); \
+		killed=$$(echo "$$out" | grep -oE 'Killed: [0-9]+' | grep -oE '[0-9]+'); \
+		lived=$$(echo "$$out" | grep -oE 'Lived: [0-9]+' | grep -oE '[0-9]+'); \
+		total=$$((killed + lived)); \
+		if [ "$$total" -eq 0 ]; then \
+			echo "    ↳ sem mutantes testáveis — pulado"; \
+			continue; \
+		fi; \
+		echo "    ↳ eficácia: $$efficacy% (killed=$$killed lived=$$lived)"; \
+		below=$$(awk -v e=$$efficacy -v t=$(MUTATION_THRESHOLD) 'BEGIN{print (e<t)?1:0}'); \
+		if [ "$$below" -eq 1 ]; then \
+			echo "    ✗ ABAIXO do threshold $(MUTATION_THRESHOLD)% — fortalecer testes"; \
+			fail=1; \
+		fi; \
+	done; \
+	if [ $$fail -ne 0 ]; then \
+		echo "❌ Mutation testing reprovou. Corrija os testes antes de commitar."; \
+		exit 1; \
+	fi; \
+	echo "✓ Todos os pacotes passaram no threshold de $(MUTATION_THRESHOLD)%"
+
+# test-unit: só unit tests, para dev loop rápido
+test-unit:
 	go test $(PKG)
 
 test-verbose:

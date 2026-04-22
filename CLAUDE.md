@@ -50,7 +50,7 @@ Regras completas em `.claude/rules/` — uma por arquivo, índice em `.claude/ru
 
 Resumo:
 1. **Tamanho** — arquivo `.go` ≤ 300 linhas
-2. **Testes** — cobertura ≥ 70%, mutation ≥ 70%
+2. **Testes** — cobertura ≥ 84%, mutation ≥ 84% (rodam juntos via `make test`)
 3. **SOLID** — SRP, OCP, LSP, ISP, DIP
 4. **Clean Architecture** — `app` (negócio) → gateways → `ui` → `cmd`
 5. **Simplicidade** — sem abstração prematura, sem flags booleanas

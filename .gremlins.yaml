@@ -28,5 +28,5 @@ mutants:
     enabled: true
 
 threshold:
-  efficacy: 70
-  mcover: 70
+  efficacy: 84
+  mcover: 84
