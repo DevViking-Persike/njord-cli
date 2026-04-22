@@ -17,25 +17,28 @@ type issuesLoadedMsg struct {
 	err    error
 }
 
-// IssuesLoader loads issues assigned to the user in a specific project.
+// IssuesLoader carrega o backlog completo de um projeto.
 type IssuesLoader interface {
-	ListMyIssuesInProject(projectKey string) ([]jiraclient.Issue, error)
+	ListProjectBacklog(projectKey string) ([]jiraclient.Issue, error)
 }
 
-// IssuesModel shows the user's issues in a project, grouped by status.
+// IssuesModel mostra o backlog do projeto agrupado por status, com busca
+// por nome ou key (GAP-123) em tempo real.
 type IssuesModel struct {
-	loader       IssuesLoader
-	projectKey   string
-	projectName  string
-	issues       []jiraclient.Issue
-	statuses     []string
-	byStatus     map[string][]jiraclient.Issue
-	loading      bool
-	loadErr      string
-	width        int
-	height       int
-	offset       int
-	goBack       bool
+	loader      IssuesLoader
+	projectKey  string
+	projectName string
+	issues      []jiraclient.Issue
+	search      string
+	statuses    []string
+	byStatus    map[string][]jiraclient.Issue
+	totalShown  int
+	loading     bool
+	loadErr     string
+	width       int
+	height      int
+	offset      int
+	goBack      bool
 }
 
 func NewIssuesModel(loader IssuesLoader, project jiraclient.Project) IssuesModel {
@@ -51,7 +54,7 @@ func (m IssuesModel) Init() tea.Cmd {
 	loader := m.loader
 	key := m.projectKey
 	return func() tea.Msg {
-		issues, err := loader.ListMyIssuesInProject(key)
+		issues, err := loader.ListProjectBacklog(key)
 		return issuesLoadedMsg{issues: issues, err: err}
 	}
 }
@@ -65,34 +68,72 @@ func (m IssuesModel) Update(msg tea.Msg) (IssuesModel, tea.Cmd) {
 			return m, nil
 		}
 		m.issues = msg.issues
-		m.statuses, m.byStatus = jira.GroupedByStatus(msg.issues)
+		m.regroup()
 		return m, nil
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "esc", "q":
-			m.goBack = true
-		case "up", "k":
-			if m.offset > 0 {
-				m.offset--
-			}
-		case "down", "j":
-			if m.offset < m.maxOffset() {
-				m.offset++
-			}
-		case "pgup":
-			m.offset -= m.visibleLines()
-			if m.offset < 0 {
-				m.offset = 0
-			}
-		case "pgdown":
-			m.offset += m.visibleLines()
-			if m.offset > m.maxOffset() {
-				m.offset = m.maxOffset()
-			}
-		}
+		return m.handleKey(msg), nil
 	}
 	return m, nil
+}
+
+func (m IssuesModel) handleKey(msg tea.KeyMsg) IssuesModel {
+	switch msg.Type {
+	case tea.KeyEsc:
+		// Primeiro esc limpa busca; segundo esc volta.
+		if m.search != "" {
+			m.search = ""
+			m.regroup()
+			m.offset = 0
+			return m
+		}
+		m.goBack = true
+		return m
+	case tea.KeyBackspace:
+		if len(m.search) > 0 {
+			m.search = m.search[:len(m.search)-1]
+			m.regroup()
+			m.offset = 0
+		}
+		return m
+	case tea.KeyUp:
+		if m.offset > 0 {
+			m.offset--
+		}
+		return m
+	case tea.KeyDown:
+		if m.offset < m.maxOffset() {
+			m.offset++
+		}
+		return m
+	case tea.KeyPgUp:
+		m.offset -= m.visibleLines()
+		if m.offset < 0 {
+			m.offset = 0
+		}
+		return m
+	case tea.KeyPgDown:
+		m.offset += m.visibleLines()
+		if m.offset > m.maxOffset() {
+			m.offset = m.maxOffset()
+		}
+		return m
+	case tea.KeyRunes, tea.KeySpace:
+		for _, r := range msg.Runes {
+			m.search += string(r)
+		}
+		m.regroup()
+		m.offset = 0
+		return m
+	}
+	return m
+}
+
+// regroup recalcula os grupos por status a partir das issues filtradas.
+func (m *IssuesModel) regroup() {
+	filtered := jira.FilterIssues(m.issues, m.search)
+	m.statuses, m.byStatus = jira.GroupedByStatus(filtered)
+	m.totalShown = len(filtered)
 }
 
 func (m IssuesModel) View() string {
@@ -100,12 +141,14 @@ func (m IssuesModel) View() string {
 
 	b.WriteString(shared.NjordTitle() + "\n\n")
 	header := lipgloss.NewStyle().Bold(true).Foreground(theme.JiraBlue).
-		Render(fmt.Sprintf("  %s — Minhas issues", m.projectName))
+		Render(fmt.Sprintf("  %s — Backlog", m.projectName))
 	divider := theme.DimStyle.Render("  " + strings.Repeat("─", 50))
-	b.WriteString(header + "\n" + divider + "\n\n")
+	b.WriteString(header + "\n")
+	b.WriteString(m.renderSearch() + "\n")
+	b.WriteString(divider + "\n\n")
 
 	if m.loading {
-		b.WriteString(theme.DimStyle.Render("  Carregando issues..."))
+		b.WriteString(theme.DimStyle.Render("  Carregando backlog..."))
 		return b.String()
 	}
 	if m.loadErr != "" {
@@ -113,7 +156,11 @@ func (m IssuesModel) View() string {
 		return b.String()
 	}
 	if len(m.issues) == 0 {
-		b.WriteString(theme.DimStyle.Render("  Nenhuma issue atribuída a você neste projeto."))
+		b.WriteString(theme.DimStyle.Render("  Backlog vazio neste projeto."))
+		return b.String()
+	}
+	if m.totalShown == 0 {
+		b.WriteString(theme.DimStyle.Render(fmt.Sprintf("  Nenhuma issue corresponde a %q.", m.search)))
 		return b.String()
 	}
 
@@ -126,11 +173,27 @@ func (m IssuesModel) View() string {
 	for i := m.offset; i < end; i++ {
 		b.WriteString(lines[i] + "\n")
 	}
-
 	if len(lines) > visible {
 		b.WriteString(theme.DimStyle.Render(fmt.Sprintf("  [%d/%d]", m.offset+1, m.maxOffset()+1)))
 	}
 	return b.String()
+}
+
+// renderSearch exibe o input de busca atual. Campo sempre visível — digitar
+// letras/números filtra live, backspace apaga.
+func (m IssuesModel) renderSearch() string {
+	label := theme.DimStyle.Render("  Buscar:")
+	value := m.search
+	if value == "" {
+		value = theme.DimStyle.Render("(digite nome ou key, ex. GAP-42)")
+	} else {
+		value = lipgloss.NewStyle().Foreground(theme.JiraBlueSel).Render(value + "▌")
+	}
+	total := ""
+	if m.search != "" && !m.loading && m.loadErr == "" {
+		total = theme.DimStyle.Render(fmt.Sprintf("   (%d de %d)", m.totalShown, len(m.issues)))
+	}
+	return label + " " + value + total
 }
 
 // buildLines produces one line per issue and per status header, in display
@@ -168,7 +231,7 @@ func formatIssueLine(iss jiraclient.Issue) string {
 }
 
 func (m IssuesModel) visibleLines() int {
-	const chromeHeight = 8 // title + header + divider + help + padding
+	const chromeHeight = 10 // title + header + search + divider + help + padding
 	v := m.height - chromeHeight
 	if v < 3 {
 		return 3

@@ -2,6 +2,7 @@ package jira
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/DevViking-Persike/njord-cli/internal/jiraclient"
 )
@@ -60,19 +61,36 @@ func (s *JiraService) ListEpicChildren(epicKey string) ([]jiraclient.Issue, erro
 	return res.Issues, nil
 }
 
-// ListMyIssuesInProject returns the authenticated user's issues in a given
-// project, ordered by status then updated desc. Caller groups by status.
+// ListProjectBacklog returns every non-Done issue in a project, ordered by
+// status then last update desc. Used for browsing + search at the space level.
 // Empty projectKey is an error.
-func (s *JiraService) ListMyIssuesInProject(projectKey string) ([]jiraclient.Issue, error) {
+func (s *JiraService) ListProjectBacklog(projectKey string) ([]jiraclient.Issue, error) {
 	if projectKey == "" {
-		return nil, fmt.Errorf("listing project issues: projectKey is required")
+		return nil, fmt.Errorf("listing project backlog: projectKey is required")
 	}
-	jql := fmt.Sprintf(`project = %q AND assignee = currentUser() ORDER BY status ASC, updated DESC`, projectKey)
+	jql := fmt.Sprintf(`project = %q AND statusCategory != Done ORDER BY status ASC, updated DESC`, projectKey)
 	res, err := s.gw.SearchIssues(jql)
 	if err != nil {
-		return nil, fmt.Errorf("listing project issues: %w", err)
+		return nil, fmt.Errorf("listing project backlog: %w", err)
 	}
 	return res.Issues, nil
+}
+
+// FilterIssues returns the subset of issues whose Key or Summary contains the
+// query (case-insensitive). Empty query returns the full slice unchanged.
+func FilterIssues(issues []jiraclient.Issue, query string) []jiraclient.Issue {
+	q := strings.ToLower(strings.TrimSpace(query))
+	if q == "" {
+		return issues
+	}
+	out := make([]jiraclient.Issue, 0, len(issues))
+	for _, iss := range issues {
+		if strings.Contains(strings.ToLower(iss.Key), q) ||
+			strings.Contains(strings.ToLower(iss.Summary), q) {
+			out = append(out, iss)
+		}
+	}
+	return out
 }
 
 // GroupedByStatus groups issues by status name, preserving first-seen order.

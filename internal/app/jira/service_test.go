@@ -2,6 +2,7 @@ package jira
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -138,36 +139,75 @@ func TestListSpaces_Error(t *testing.T) {
 	}
 }
 
-func TestListMyIssuesInProject_RequiresKey(t *testing.T) {
+func TestListProjectBacklog_RequiresKey(t *testing.T) {
 	svc := NewJiraService(&fakeJiraGW{})
-	if _, err := svc.ListMyIssuesInProject(""); err == nil {
+	if _, err := svc.ListProjectBacklog(""); err == nil {
 		t.Error("expected error on empty projectKey")
 	}
 }
 
-func TestListMyIssuesInProject_JQL(t *testing.T) {
+func TestListProjectBacklog_JQL(t *testing.T) {
 	gw := &fakeJiraGW{searchRes: jiraclient.SearchResult{Issues: []jiraclient.Issue{{Key: "GAP-1"}}}}
 	svc := NewJiraService(gw)
-	got, err := svc.ListMyIssuesInProject("GAP")
+	got, err := svc.ListProjectBacklog("GAP")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(got) != 1 || got[0].Key != "GAP-1" {
 		t.Errorf("issues = %+v", got)
 	}
-	wantFragments := []string{`project = "GAP"`, "assignee = currentUser()", "ORDER BY status"}
+	wantFragments := []string{`project = "GAP"`, "statusCategory != Done", "ORDER BY status"}
+	absentFragments := []string{"assignee = currentUser()"}
 	for _, frag := range wantFragments {
 		if !strings.Contains(gw.lastJQL, frag) {
 			t.Errorf("JQL missing %q: %s", frag, gw.lastJQL)
 		}
 	}
+	for _, frag := range absentFragments {
+		if strings.Contains(gw.lastJQL, frag) {
+			t.Errorf("JQL should NOT contain %q (backlog is everyone's): %s", frag, gw.lastJQL)
+		}
+	}
 }
 
-func TestListMyIssuesInProject_PropagatesError(t *testing.T) {
+func TestListProjectBacklog_PropagatesError(t *testing.T) {
 	gw := &fakeJiraGW{searchErr: errors.New("boom")}
 	svc := NewJiraService(gw)
-	if _, err := svc.ListMyIssuesInProject("GAP"); err == nil {
+	if _, err := svc.ListProjectBacklog("GAP"); err == nil {
 		t.Error("expected error")
+	}
+}
+
+func TestFilterIssues(t *testing.T) {
+	issues := []jiraclient.Issue{
+		{Key: "GAP-1", Summary: "Fix login bug"},
+		{Key: "GAP-42", Summary: "Add caching"},
+		{Key: "BILL-7", Summary: "Retry on 429"},
+	}
+
+	tests := []struct {
+		query    string
+		wantKeys []string
+	}{
+		{"", []string{"GAP-1", "GAP-42", "BILL-7"}},
+		{"   ", []string{"GAP-1", "GAP-42", "BILL-7"}},
+		{"gap", []string{"GAP-1", "GAP-42"}},
+		{"GAP-42", []string{"GAP-42"}},
+		{"login", []string{"GAP-1"}},
+		{"CACH", []string{"GAP-42"}},
+		{"nonexistent", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.query, func(t *testing.T) {
+			got := FilterIssues(issues, tt.query)
+			var keys []string
+			for _, iss := range got {
+				keys = append(keys, iss.Key)
+			}
+			if !reflect.DeepEqual(keys, tt.wantKeys) {
+				t.Errorf("FilterIssues(%q) = %v, want %v", tt.query, keys, tt.wantKeys)
+			}
+		})
 	}
 }
 
