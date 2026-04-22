@@ -1,42 +1,42 @@
-package app
+package jira
 
 import (
 	"errors"
 	"strings"
 	"testing"
 
-	"github.com/DevViking-Persike/njord-cli/internal/jira"
+	"github.com/DevViking-Persike/njord-cli/internal/jiraclient"
 )
 
 type fakeJiraGW struct {
-	user        jira.User
+	user        jiraclient.User
 	userErr     error
-	searchRes   jira.SearchResult
+	searchRes   jiraclient.SearchResult
 	searchErr   error
-	projects    []jira.Project
+	projects    []jiraclient.Project
 	projectsErr error
 	lastJQL     string
 	callCount   int
 }
 
-func (f *fakeJiraGW) CurrentUser() (jira.User, error) {
+func (f *fakeJiraGW) CurrentUser() (jiraclient.User, error) {
 	f.callCount++
 	return f.user, f.userErr
 }
 
-func (f *fakeJiraGW) SearchIssues(jql string) (jira.SearchResult, error) {
+func (f *fakeJiraGW) SearchIssues(jql string) (jiraclient.SearchResult, error) {
 	f.lastJQL = jql
 	f.callCount++
 	return f.searchRes, f.searchErr
 }
 
-func (f *fakeJiraGW) ListProjects() ([]jira.Project, error) {
+func (f *fakeJiraGW) ListProjects() ([]jiraclient.Project, error) {
 	f.callCount++
 	return f.projects, f.projectsErr
 }
 
 func TestListMyOpenIssues_UsesExpectedJQL(t *testing.T) {
-	gw := &fakeJiraGW{searchRes: jira.SearchResult{Issues: []jira.Issue{{Key: "P-1"}}}}
+	gw := &fakeJiraGW{searchRes: jiraclient.SearchResult{Issues: []jiraclient.Issue{{Key: "P-1"}}}}
 	svc := NewJiraService(gw)
 
 	got, err := svc.ListMyOpenIssues()
@@ -80,7 +80,7 @@ func TestListEpicChildren_RequiresKey(t *testing.T) {
 }
 
 func TestListEpicChildren_QueriesByParent(t *testing.T) {
-	gw := &fakeJiraGW{searchRes: jira.SearchResult{Issues: []jira.Issue{{Key: "C-1"}, {Key: "C-2"}}}}
+	gw := &fakeJiraGW{searchRes: jiraclient.SearchResult{Issues: []jiraclient.Issue{{Key: "C-1"}, {Key: "C-2"}}}}
 	svc := NewJiraService(gw)
 
 	children, err := svc.ListEpicChildren("EPIC-1")
@@ -104,7 +104,7 @@ func TestListEpicChildren_PropagatesError(t *testing.T) {
 }
 
 func TestCheckConnection_Success(t *testing.T) {
-	gw := &fakeJiraGW{user: jira.User{DisplayName: "V"}}
+	gw := &fakeJiraGW{user: jiraclient.User{DisplayName: "V"}}
 	svc := NewJiraService(gw)
 	u, err := svc.CheckConnection()
 	if err != nil {
@@ -116,7 +116,7 @@ func TestCheckConnection_Success(t *testing.T) {
 }
 
 func TestListSpaces_ReturnsAll(t *testing.T) {
-	gw := &fakeJiraGW{projects: []jira.Project{
+	gw := &fakeJiraGW{projects: []jiraclient.Project{
 		{Key: "GAP", Name: "Squad GAP"},
 		{Key: "BILL", Name: "Squad Billing"},
 	}}
@@ -146,7 +146,7 @@ func TestListMyIssuesInProject_RequiresKey(t *testing.T) {
 }
 
 func TestListMyIssuesInProject_JQL(t *testing.T) {
-	gw := &fakeJiraGW{searchRes: jira.SearchResult{Issues: []jira.Issue{{Key: "GAP-1"}}}}
+	gw := &fakeJiraGW{searchRes: jiraclient.SearchResult{Issues: []jiraclient.Issue{{Key: "GAP-1"}}}}
 	svc := NewJiraService(gw)
 	got, err := svc.ListMyIssuesInProject("GAP")
 	if err != nil {
@@ -172,7 +172,7 @@ func TestListMyIssuesInProject_PropagatesError(t *testing.T) {
 }
 
 func TestGroupedByStatus(t *testing.T) {
-	issues := []jira.Issue{
+	issues := []jiraclient.Issue{
 		{Key: "A-1", Status: "Desenvolvimento em 2.2"},
 		{Key: "A-2", Status: "Desenvolvimento em 2.1"},
 		{Key: "A-3", Status: "Desenvolvimento em 2.2"},

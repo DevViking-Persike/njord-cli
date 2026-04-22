@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/DevViking-Persike/njord-cli/internal/app"
+	"github.com/DevViking-Persike/njord-cli/internal/app/jira"
+	"github.com/DevViking-Persike/njord-cli/internal/app/project"
 	"github.com/DevViking-Persike/njord-cli/internal/config"
 	"github.com/DevViking-Persike/njord-cli/internal/docker"
-	"github.com/DevViking-Persike/njord-cli/internal/gitlab"
-	"github.com/DevViking-Persike/njord-cli/internal/jira"
+	"github.com/DevViking-Persike/njord-cli/internal/gitlabclient"
+	"github.com/DevViking-Persike/njord-cli/internal/jiraclient"
 	"github.com/DevViking-Persike/njord-cli/internal/theme"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -19,7 +20,7 @@ type gitlabRefreshTickMsg struct{}
 
 // Async message for GitLab client initialization
 type gitlabInitMsg struct {
-	client *gitlab.Client
+	client *gitlabclient.Client
 	cfg    *config.Config
 	err    error
 }
@@ -80,10 +81,10 @@ type AppModel struct {
 	jiraIssues    JiraIssuesModel
 
 	// GitLab client (lazy init)
-	gitlabClient *gitlab.Client
+	gitlabClient *gitlabclient.Client
 
 	// Jira client (lazy init)
-	jiraClient *jira.Client
+	jiraClient *jiraclient.Client
 
 	// Context for transitions
 	selectedCatID string
@@ -300,7 +301,7 @@ func (m AppModel) updateGrid(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// Lazy init gitlab client
 			if m.gitlabClient == nil {
-				client, err := gitlab.NewClient(m.config.GitLab.Token, m.config.GitLab.GitLabURL())
+				client, err := gitlabclient.NewClient(m.config.GitLab.Token, m.config.GitLab.GitLabURL())
 				if err == nil {
 					m.gitlabClient = client
 				}
@@ -324,13 +325,13 @@ func (m AppModel) updateGrid(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case GridItemJira:
 			if m.jiraClient == nil {
-				client, err := jira.NewClient(m.config.Jira.URL, m.config.Jira.Email, m.config.Jira.Token)
+				client, err := jiraclient.NewClient(m.config.Jira.URL, m.config.Jira.Email, m.config.Jira.Token)
 				if err != nil {
 					return m, nil
 				}
 				m.jiraClient = client
 			}
-			svc := app.NewJiraService(m.jiraClient)
+			svc := jira.NewJiraService(m.jiraClient)
 			m.jiraSpaces = NewJiraSpacesModel(svc)
 			m.jiraSpaces.SetSize(m.width, m.height)
 			m.screen = ScreenJiraSpaces
@@ -351,7 +352,7 @@ func (m AppModel) updateJiraSpaces(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if sel := m.jiraSpaces.Selected(); sel != nil {
 		m.jiraSpaces.ClearSelection()
-		svc := app.NewJiraService(m.jiraClient)
+		svc := jira.NewJiraService(m.jiraClient)
 		m.jiraIssues = NewJiraIssuesModel(svc, *sel)
 		m.jiraIssues.SetSize(m.width, m.height)
 		m.screen = ScreenJiraIssues
@@ -381,7 +382,7 @@ func (m AppModel) updateProjects(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if proj := m.projects.Selected(); proj != nil {
-		command, err := app.BuildProjectCommand(m.config, *proj)
+		command, err := project.BuildProjectCommand(m.config, *proj)
 		if err != nil {
 			return m, nil
 		}
@@ -535,7 +536,7 @@ func (m AppModel) initGitLabFetches() tea.Cmd {
 	cfg := m.config
 
 	return func() tea.Msg {
-		client, err := gitlab.NewClient(token, url)
+		client, err := gitlabclient.NewClient(token, url)
 		if err != nil {
 			return gitlabInitMsg{err: err}
 		}
@@ -543,7 +544,7 @@ func (m AppModel) initGitLabFetches() tea.Cmd {
 	}
 }
 
-func fetchRecentPushes(client *gitlab.Client, cfg *config.Config) tea.Cmd {
+func fetchRecentPushes(client *gitlabclient.Client, cfg *config.Config) tea.Cmd {
 	return func() tea.Msg {
 		pushes, err := client.ListRecentPushes(3)
 		if err != nil {
@@ -599,7 +600,7 @@ func fetchRecentPushes(client *gitlab.Client, cfg *config.Config) tea.Cmd {
 	}
 }
 
-func fetchPendingMRs(client *gitlab.Client, cfg *config.Config) tea.Cmd {
+func fetchPendingMRs(client *gitlabclient.Client, cfg *config.Config) tea.Cmd {
 	return func() tea.Msg {
 		mrs, err := client.ListMyOpenMRs()
 		if err != nil {

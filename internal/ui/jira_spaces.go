@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/DevViking-Persike/njord-cli/internal/jira"
+	"github.com/DevViking-Persike/njord-cli/internal/jiraclient"
 	"github.com/DevViking-Persike/njord-cli/internal/theme"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -12,20 +12,20 @@ import (
 
 // jiraSpacesLoadedMsg carries the async result of listing Jira projects.
 type jiraSpacesLoadedMsg struct {
-	projects []jira.Project
+	projects []jiraclient.Project
 	err      error
 }
 
 // JiraSpacesLoader is the minimum surface for loading Jira spaces.
 // Kept as an interface so the UI never depends directly on internal/app.
 type JiraSpacesLoader interface {
-	ListSpaces() ([]jira.Project, error)
+	ListSpaces() ([]jiraclient.Project, error)
 }
 
 // JiraSpacesModel renders a grid of Jira projects (espaços).
 type JiraSpacesModel struct {
 	loader    JiraSpacesLoader
-	projects  []jira.Project
+	projects  []jiraclient.Project
 	loading   bool
 	loadErr   string
 	cursor    int
@@ -34,7 +34,7 @@ type JiraSpacesModel struct {
 	width     int
 	height    int
 	offset    int // first visible row (scroll position)
-	selected  *jira.Project
+	selected  *jiraclient.Project
 	goBack    bool
 }
 
@@ -190,7 +190,7 @@ func (m *JiraSpacesModel) ensureVisible() {
 	}
 }
 
-func (m JiraSpacesModel) renderCard(p jira.Project, selected bool) string {
+func (m JiraSpacesModel) renderCard(p jiraclient.Project, selected bool) string {
 	cardStyle, titleStyle, subStyle := theme.CardStyle, theme.TitleStyle, theme.SubStyle
 	if selected {
 		cardStyle, titleStyle, subStyle = theme.CardSelectedStyle, theme.TitleSelectedStyle, theme.SubSelectedStyle
@@ -230,7 +230,7 @@ func (m *JiraSpacesModel) recalcLayout() {
 func (m *JiraSpacesModel) GoBack() bool { return m.goBack }
 
 // Selected returns the project the user picked, or nil.
-func (m *JiraSpacesModel) Selected() *jira.Project { return m.selected }
+func (m *JiraSpacesModel) Selected() *jiraclient.Project { return m.selected }
 
 // ClearSelection clears the picked project.
 func (m *JiraSpacesModel) ClearSelection() { m.selected = nil }

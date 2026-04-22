@@ -1,22 +1,22 @@
-package app
+package gitlab
 
 import (
 	"fmt"
 	"time"
 
 	"github.com/DevViking-Persike/njord-cli/internal/config"
-	"github.com/DevViking-Persike/njord-cli/internal/gitlab"
+	"github.com/DevViking-Persike/njord-cli/internal/gitlabclient"
 )
 
 type GitLabStatusLoader interface {
-	ListPipelines(projectPath string, limit int) ([]gitlab.PipelineInfo, error)
-	GetProjectLatestMRApproval(projectPath string) (*gitlab.MRApprovalInfo, error)
+	ListPipelines(projectPath string, limit int) ([]gitlabclient.PipelineInfo, error)
+	GetProjectLatestMRApproval(projectPath string) (*gitlabclient.MRApprovalInfo, error)
 }
 
 type GitLabProjectStatus struct {
 	Status   string
 	LastTime time.Time
-	Approval *gitlab.MRApprovalInfo
+	Approval *gitlabclient.MRApprovalInfo
 }
 
 func LoadGitLabProjectStatus(client GitLabStatusLoader, gitlabPath string) GitLabProjectStatus {
@@ -49,7 +49,7 @@ func DetectGitLabPath(cfg *config.Config, catIdx, projIdx int) (string, error) {
 
 	project := cfg.Categories[catIdx].Projects[projIdx]
 	path := cfg.ResolveProjectPath(project)
-	return gitlab.ParseGitLabPath(path)
+	return gitlabclient.ParseGitLabPath(path)
 }
 
 func SaveGitLabPath(cfg *config.Config, configPath string, catIdx, projIdx int, gitlabPath string) error {

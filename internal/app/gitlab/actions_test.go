@@ -1,34 +1,34 @@
-package app
+package gitlab
 
 import (
 	"errors"
 	"testing"
 
-	"github.com/DevViking-Persike/njord-cli/internal/gitlab"
+	"github.com/DevViking-Persike/njord-cli/internal/gitlabclient"
 )
 
 type stubGitLabActionsClient struct {
-	mrs        []gitlab.MergeRequestInfo
-	pipelines  []gitlab.PipelineInfo
-	branches   []gitlab.BranchInfo
-	triggered  *gitlab.PipelineInfo
+	mrs        []gitlabclient.MergeRequestInfo
+	pipelines  []gitlabclient.PipelineInfo
+	branches   []gitlabclient.BranchInfo
+	triggered  *gitlabclient.PipelineInfo
 	triggerErr error
 	createErr  error
 }
 
-func (s stubGitLabActionsClient) ListMergeRequests(projectPath string, state string) ([]gitlab.MergeRequestInfo, error) {
+func (s stubGitLabActionsClient) ListMergeRequests(projectPath string, state string) ([]gitlabclient.MergeRequestInfo, error) {
 	return s.mrs, nil
 }
 
-func (s stubGitLabActionsClient) ListPipelines(projectPath string, limit int) ([]gitlab.PipelineInfo, error) {
+func (s stubGitLabActionsClient) ListPipelines(projectPath string, limit int) ([]gitlabclient.PipelineInfo, error) {
 	return s.pipelines, nil
 }
 
-func (s stubGitLabActionsClient) ListBranchesDetailed(projectPath string) ([]gitlab.BranchInfo, error) {
+func (s stubGitLabActionsClient) ListBranchesDetailed(projectPath string) ([]gitlabclient.BranchInfo, error) {
 	return s.branches, nil
 }
 
-func (s stubGitLabActionsClient) TriggerPipeline(projectPath, ref string) (*gitlab.PipelineInfo, error) {
+func (s stubGitLabActionsClient) TriggerPipeline(projectPath, ref string) (*gitlabclient.PipelineInfo, error) {
 	return s.triggered, s.triggerErr
 }
 
@@ -38,9 +38,9 @@ func (s stubGitLabActionsClient) CreateBranch(projectPath, branchName, ref strin
 
 func TestLoadGitLabActionsData(t *testing.T) {
 	client := stubGitLabActionsClient{
-		mrs:       []gitlab.MergeRequestInfo{{IID: 1}},
-		pipelines: []gitlab.PipelineInfo{{ID: 2}},
-		branches:  []gitlab.BranchInfo{{Name: "main"}},
+		mrs:       []gitlabclient.MergeRequestInfo{{IID: 1}},
+		pipelines: []gitlabclient.PipelineInfo{{ID: 2}},
+		branches:  []gitlabclient.BranchInfo{{Name: "main"}},
 	}
 
 	mrs, err := LoadMergeRequests(client, "group/repo")
@@ -61,7 +61,7 @@ func TestLoadGitLabActionsData(t *testing.T) {
 
 func TestTriggerProjectPipeline(t *testing.T) {
 	message, err := TriggerProjectPipeline(stubGitLabActionsClient{
-		triggered: &gitlab.PipelineInfo{ID: 42},
+		triggered: &gitlabclient.PipelineInfo{ID: 42},
 	}, "group/repo", "main")
 	if err != nil {
 		t.Fatalf("TriggerProjectPipeline() error = %v", err)

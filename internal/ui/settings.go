@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/DevViking-Persike/njord-cli/internal/app"
+	"github.com/DevViking-Persike/njord-cli/internal/app/project"
 	"github.com/DevViking-Persike/njord-cli/internal/config"
 	"github.com/DevViking-Persike/njord-cli/internal/theme"
 	"github.com/DevViking-Persike/njord-cli/internal/ui/components"
@@ -408,7 +408,7 @@ func (m SettingsModel) handleDeleteConfirm(msg tea.KeyMsg) (SettingsModel, tea.C
 	case "enter":
 		if m.cursor == 0 {
 			ref := m.allProjects[m.selectedProjIdx]
-			if err := app.RemoveProject(m.cfg, m.configPath, ref.catIdx, ref.projIdx); err != nil {
+			if err := project.RemoveProject(m.cfg, m.configPath, ref.catIdx, ref.projIdx); err != nil {
 				m.message = fmt.Sprintf("Erro ao remover projeto: %s", err)
 				m.messageType = "error"
 				m.screen = settingsDone
@@ -487,7 +487,7 @@ func (m SettingsModel) handleEditGroupSelect(msg tea.KeyMsg) (SettingsModel, tea
 		ref := m.allProjects[m.selectedProjIdx]
 		if m.cursor == 0 {
 			// Sem grupo
-			if err := app.UpdateProjectGroup(m.cfg, m.configPath, ref.catIdx, ref.projIdx, ""); err != nil {
+			if err := project.UpdateProjectGroup(m.cfg, m.configPath, ref.catIdx, ref.projIdx, ""); err != nil {
 				m.message = fmt.Sprintf("Erro ao atualizar grupo: %s", err)
 				m.messageType = "error"
 				m.screen = settingsDone
@@ -504,7 +504,7 @@ func (m SettingsModel) handleEditGroupSelect(msg tea.KeyMsg) (SettingsModel, tea
 		} else {
 			// Grupo existente
 			group := m.options[m.cursor]
-			if err := app.UpdateProjectGroup(m.cfg, m.configPath, ref.catIdx, ref.projIdx, group); err != nil {
+			if err := project.UpdateProjectGroup(m.cfg, m.configPath, ref.catIdx, ref.projIdx, group); err != nil {
 				m.message = fmt.Sprintf("Erro ao atualizar grupo: %s", err)
 				m.messageType = "error"
 				m.screen = settingsDone
@@ -580,7 +580,7 @@ func (m SettingsModel) submitSettingsInput() (SettingsModel, tea.Cmd) {
 			m.message = "Descrição não pode ser vazia"
 			return m, nil
 		}
-		if err := app.UpdateCategory(m.cfg, m.configPath, m.selectedCatIdx, m.cfg.Categories[m.selectedCatIdx].Name, val); err != nil {
+		if err := project.UpdateCategory(m.cfg, m.configPath, m.selectedCatIdx, m.cfg.Categories[m.selectedCatIdx].Name, val); err != nil {
 			m.message = fmt.Sprintf("Erro ao atualizar categoria: %s", err)
 			m.messageType = "error"
 		} else {
@@ -598,9 +598,9 @@ func (m SettingsModel) submitSettingsInput() (SettingsModel, tea.Cmd) {
 		var err error
 		switch m.editingField {
 		case "projects_base":
-			err = app.UpdateProjectsBase(m.cfg, m.configPath, val)
+			err = project.UpdateProjectsBase(m.cfg, m.configPath, val)
 		case "personal_base":
-			err = app.UpdatePersonalBase(m.cfg, m.configPath, val)
+			err = project.UpdatePersonalBase(m.cfg, m.configPath, val)
 		}
 		if err != nil {
 			m.message = fmt.Sprintf("Erro ao atualizar path: %s", err)
@@ -618,7 +618,7 @@ func (m SettingsModel) submitSettingsInput() (SettingsModel, tea.Cmd) {
 			return m, nil
 		}
 		ref := m.allProjects[m.selectedProjIdx]
-		if err := app.UpdateProjectGroup(m.cfg, m.configPath, ref.catIdx, ref.projIdx, val); err != nil {
+		if err := project.UpdateProjectGroup(m.cfg, m.configPath, ref.catIdx, ref.projIdx, val); err != nil {
 			m.message = fmt.Sprintf("Erro ao atualizar grupo: %s", err)
 			m.messageType = "error"
 		} else {
@@ -629,7 +629,7 @@ func (m SettingsModel) submitSettingsInput() (SettingsModel, tea.Cmd) {
 		return m, nil
 
 	case settingsEditGitLabToken:
-		if err := app.UpdateGitLabToken(m.cfg, m.configPath, val); err != nil {
+		if err := project.UpdateGitLabToken(m.cfg, m.configPath, val); err != nil {
 			m.message = fmt.Sprintf("Erro ao salvar token GitLab: %s", err)
 			m.messageType = "error"
 		} else {

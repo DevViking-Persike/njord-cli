@@ -3,7 +3,7 @@
 BINARY := njord
 INSTALL_PATH := $(HOME)/.local/bin/njord-cli
 PKG := ./...
-MUTATION_PKGS := ./internal/app/ ./internal/docker/ ./internal/config/ ./internal/jira/
+MUTATION_PKGS := ./internal/app/gitlab/ ./internal/app/jira/ ./internal/app/project/ ./internal/docker/ ./internal/config/ ./internal/jiraclient/
 
 build:
 	go build -o $(BINARY) ./cmd/njord/
@@ -70,7 +70,7 @@ mutation-docker:
 	gremlins unleash ./internal/docker/
 
 mutation-app:
-	gremlins unleash ./internal/app/
+	gremlins unleash ./internal/app/gitlab/ ./internal/app/jira/ ./internal/app/project/
 
 clean:
 	rm -f $(BINARY) coverage.out coverage.html

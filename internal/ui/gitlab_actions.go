@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/DevViking-Persike/njord-cli/internal/app"
-	"github.com/DevViking-Persike/njord-cli/internal/gitlab"
+	"github.com/DevViking-Persike/njord-cli/internal/app/gitlab"
+	"github.com/DevViking-Persike/njord-cli/internal/gitlabclient"
 	"github.com/DevViking-Persike/njord-cli/internal/theme"
 	"github.com/DevViking-Persike/njord-cli/internal/ui/components"
 	tea "github.com/charmbracelet/bubbletea"
@@ -51,17 +51,17 @@ var jiraTeams = []jiraTeam{
 
 // Async messages
 type gitlabMRsMsg struct {
-	mrs []gitlab.MergeRequestInfo
+	mrs []gitlabclient.MergeRequestInfo
 	err error
 }
 
 type gitlabPipelinesMsg struct {
-	pipelines []gitlab.PipelineInfo
+	pipelines []gitlabclient.PipelineInfo
 	err       error
 }
 
 type gitlabBranchesMsg struct {
-	branches []gitlab.BranchInfo
+	branches []gitlabclient.BranchInfo
 	err      error
 }
 
@@ -72,7 +72,7 @@ type gitlabActionDoneMsg struct {
 }
 
 type GitLabActionsModel struct {
-	client      *gitlab.Client
+	client      *gitlabclient.Client
 	projectPath string
 	projectName string
 	gitlabURL   string
@@ -84,9 +84,9 @@ type GitLabActionsModel struct {
 	loading bool
 
 	// Data
-	mrs       []gitlab.MergeRequestInfo
-	pipelines []gitlab.PipelineInfo
-	branches  []gitlab.BranchInfo
+	mrs       []gitlabclient.MergeRequestInfo
+	pipelines []gitlabclient.PipelineInfo
+	branches  []gitlabclient.BranchInfo
 
 	// Input state
 	inputBuf       string
@@ -100,7 +100,7 @@ type GitLabActionsModel struct {
 	width int
 }
 
-func NewGitLabActionsModel(client *gitlab.Client, projectPath, projectName, gitlabURL string) GitLabActionsModel {
+func NewGitLabActionsModel(client *gitlabclient.Client, projectPath, projectName, gitlabURL string) GitLabActionsModel {
 	return GitLabActionsModel{
 		client:      client,
 		projectPath: projectPath,
@@ -318,28 +318,28 @@ func (m GitLabActionsModel) handleResult(msg tea.KeyMsg) (GitLabActionsModel, te
 
 func (m GitLabActionsModel) fetchMRs() tea.Cmd {
 	return func() tea.Msg {
-		mrs, err := app.LoadMergeRequests(m.client, m.projectPath)
+		mrs, err := gitlab.LoadMergeRequests(m.client, m.projectPath)
 		return gitlabMRsMsg{mrs: mrs, err: err}
 	}
 }
 
 func (m GitLabActionsModel) fetchPipelines() tea.Cmd {
 	return func() tea.Msg {
-		pipelines, err := app.LoadPipelines(m.client, m.projectPath, 20)
+		pipelines, err := gitlab.LoadPipelines(m.client, m.projectPath, 20)
 		return gitlabPipelinesMsg{pipelines: pipelines, err: err}
 	}
 }
 
 func (m GitLabActionsModel) fetchBranches() tea.Cmd {
 	return func() tea.Msg {
-		branches, err := app.LoadBranches(m.client, m.projectPath)
+		branches, err := gitlab.LoadBranches(m.client, m.projectPath)
 		return gitlabBranchesMsg{branches: branches, err: err}
 	}
 }
 
 func (m GitLabActionsModel) triggerPipeline(ref string) tea.Cmd {
 	return func() tea.Msg {
-		message, err := app.TriggerProjectPipeline(m.client, m.projectPath, ref)
+		message, err := gitlab.TriggerProjectPipeline(m.client, m.projectPath, ref)
 		if err != nil {
 			return gitlabActionDoneMsg{err: err}
 		}
@@ -352,7 +352,7 @@ func (m GitLabActionsModel) triggerPipeline(ref string) tea.Cmd {
 
 func (m GitLabActionsModel) createBranch(name, ref string) tea.Cmd {
 	return func() tea.Msg {
-		message, err := app.CreateProjectBranch(m.client, m.projectPath, name, ref)
+		message, err := gitlab.CreateProjectBranch(m.client, m.projectPath, name, ref)
 		if err != nil {
 			return gitlabActionDoneMsg{err: err}
 		}

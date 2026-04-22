@@ -1,4 +1,4 @@
-package jira
+package jiraclient
 
 // Issue is the minimal Jira issue representation the app cares about.
 type Issue struct {

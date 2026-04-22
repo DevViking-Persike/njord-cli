@@ -5,16 +5,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DevViking-Persike/njord-cli/internal/jira"
+	"github.com/DevViking-Persike/njord-cli/internal/jiraclient"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 type fakeLoader struct {
-	projects []jira.Project
+	projects []jiraclient.Project
 	err      error
 }
 
-func (f *fakeLoader) ListSpaces() ([]jira.Project, error) {
+func (f *fakeLoader) ListSpaces() ([]jiraclient.Project, error) {
 	return f.projects, f.err
 }
 
@@ -26,13 +26,13 @@ func TestJiraSpaces_InitShowsLoading(t *testing.T) {
 }
 
 func TestJiraSpaces_LoadedShowsProjects(t *testing.T) {
-	m := NewJiraSpacesModel(&fakeLoader{projects: []jira.Project{
+	m := NewJiraSpacesModel(&fakeLoader{projects: []jiraclient.Project{
 		{Key: "GAP", Name: "Squad GAP"},
 		{Key: "BILL", Name: "Squad Billing"},
 	}})
 	m.SetSize(80, 40)
 
-	m, _ = m.Update(jiraSpacesLoadedMsg{projects: []jira.Project{
+	m, _ = m.Update(jiraSpacesLoadedMsg{projects: []jiraclient.Project{
 		{Key: "GAP", Name: "Squad GAP"},
 		{Key: "BILL", Name: "Squad Billing"},
 	}})
@@ -65,7 +65,7 @@ func TestJiraSpaces_EscTriggersGoBack(t *testing.T) {
 func TestJiraSpaces_EnterSelectsProject(t *testing.T) {
 	m := NewJiraSpacesModel(&fakeLoader{})
 	m.SetSize(80, 40)
-	m, _ = m.Update(jiraSpacesLoadedMsg{projects: []jira.Project{
+	m, _ = m.Update(jiraSpacesLoadedMsg{projects: []jiraclient.Project{
 		{Key: "GAP", Name: "Squad GAP"},
 	}})
 

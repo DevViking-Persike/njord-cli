@@ -4,21 +4,21 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/DevViking-Persike/njord-cli/internal/app"
-	"github.com/DevViking-Persike/njord-cli/internal/jira"
+	"github.com/DevViking-Persike/njord-cli/internal/app/jira"
+	"github.com/DevViking-Persike/njord-cli/internal/jiraclient"
 	"github.com/DevViking-Persike/njord-cli/internal/theme"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 type jiraIssuesLoadedMsg struct {
-	issues []jira.Issue
+	issues []jiraclient.Issue
 	err    error
 }
 
 // JiraIssuesLoader loads issues assigned to the user in a specific project.
 type JiraIssuesLoader interface {
-	ListMyIssuesInProject(projectKey string) ([]jira.Issue, error)
+	ListMyIssuesInProject(projectKey string) ([]jiraclient.Issue, error)
 }
 
 // JiraIssuesModel shows the user's issues in a project, grouped by status.
@@ -26,9 +26,9 @@ type JiraIssuesModel struct {
 	loader       JiraIssuesLoader
 	projectKey   string
 	projectName  string
-	issues       []jira.Issue
+	issues       []jiraclient.Issue
 	statuses     []string
-	byStatus     map[string][]jira.Issue
+	byStatus     map[string][]jiraclient.Issue
 	loading      bool
 	loadErr      string
 	width        int
@@ -37,7 +37,7 @@ type JiraIssuesModel struct {
 	goBack       bool
 }
 
-func NewJiraIssuesModel(loader JiraIssuesLoader, project jira.Project) JiraIssuesModel {
+func NewJiraIssuesModel(loader JiraIssuesLoader, project jiraclient.Project) JiraIssuesModel {
 	return JiraIssuesModel{
 		loader:      loader,
 		projectKey:  project.Key,
@@ -64,7 +64,7 @@ func (m JiraIssuesModel) Update(msg tea.Msg) (JiraIssuesModel, tea.Cmd) {
 			return m, nil
 		}
 		m.issues = msg.issues
-		m.statuses, m.byStatus = app.GroupedByStatus(msg.issues)
+		m.statuses, m.byStatus = jira.GroupedByStatus(msg.issues)
 		return m, nil
 
 	case tea.KeyMsg:
@@ -152,7 +152,7 @@ func (m JiraIssuesModel) buildLines() []string {
 	return lines
 }
 
-func formatIssueLine(iss jira.Issue) string {
+func formatIssueLine(iss jiraclient.Issue) string {
 	keyStyle := lipgloss.NewStyle().Foreground(theme.JiraBlue)
 	typeStyle := theme.DimStyle
 	summary := iss.Summary

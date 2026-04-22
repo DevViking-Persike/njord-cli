@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/DevViking-Persike/njord-cli/internal/app"
+	"github.com/DevViking-Persike/njord-cli/internal/app/gitlab"
 	"github.com/DevViking-Persike/njord-cli/internal/config"
 	"github.com/DevViking-Persike/njord-cli/internal/docker"
 	"github.com/DevViking-Persike/njord-cli/internal/ui"
@@ -141,7 +141,7 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 }
 
 func runPush(cmd *cobra.Command, args []string) error {
-	return app.NewPushService().Run(configPath, args, os.Stdout, os.Stderr)
+	return gitlab.NewPushService().Run(configPath, args, os.Stdout, os.Stderr)
 }
 
 func defaultConfig() *config.Config {

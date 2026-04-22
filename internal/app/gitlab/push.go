@@ -1,4 +1,4 @@
-package app
+package gitlab
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/DevViking-Persike/njord-cli/internal/config"
-	"github.com/DevViking-Persike/njord-cli/internal/gitlab"
+	"github.com/DevViking-Persike/njord-cli/internal/gitlabclient"
 )
 
 type cmdRunner interface {
@@ -31,14 +31,14 @@ var commandRunner = func(name string, args ...string) cmdRunner {
 
 type PushService struct {
 	LoadConfig func(path string) (*config.Config, error)
-	NewGitLab  func(token, url string) (*gitlab.Client, error)
+	NewGitLab  func(token, url string) (*gitlabclient.Client, error)
 	Getwd      func() (string, error)
 }
 
 func NewPushService() PushService {
 	return PushService{
 		LoadConfig: config.Load,
-		NewGitLab:  gitlab.NewClient,
+		NewGitLab:  gitlabclient.NewClient,
 		Getwd:      os.Getwd,
 	}
 }
@@ -71,7 +71,7 @@ func (s PushService) Run(configPath string, args []string, stdout, stderr io.Wri
 	if err != nil {
 		return fmt.Errorf("obtendo diretório atual: %w", err)
 	}
-	projectPath, err := gitlab.ParseGitLabPath(cwd)
+	projectPath, err := gitlabclient.ParseGitLabPath(cwd)
 	if err != nil {
 		return fmt.Errorf("detectando projeto GitLab: %w", err)
 	}

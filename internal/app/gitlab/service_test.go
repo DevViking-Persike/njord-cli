@@ -1,4 +1,4 @@
-package app
+package gitlab
 
 import (
 	"os"
@@ -7,27 +7,27 @@ import (
 	"time"
 
 	"github.com/DevViking-Persike/njord-cli/internal/config"
-	"github.com/DevViking-Persike/njord-cli/internal/gitlab"
+	"github.com/DevViking-Persike/njord-cli/internal/gitlabclient"
 )
 
 type stubGitLabStatusLoader struct {
-	pipelines []gitlab.PipelineInfo
-	approval  *gitlab.MRApprovalInfo
+	pipelines []gitlabclient.PipelineInfo
+	approval  *gitlabclient.MRApprovalInfo
 }
 
-func (s stubGitLabStatusLoader) ListPipelines(projectPath string, limit int) ([]gitlab.PipelineInfo, error) {
+func (s stubGitLabStatusLoader) ListPipelines(projectPath string, limit int) ([]gitlabclient.PipelineInfo, error) {
 	return s.pipelines, nil
 }
 
-func (s stubGitLabStatusLoader) GetProjectLatestMRApproval(projectPath string) (*gitlab.MRApprovalInfo, error) {
+func (s stubGitLabStatusLoader) GetProjectLatestMRApproval(projectPath string) (*gitlabclient.MRApprovalInfo, error) {
 	return s.approval, nil
 }
 
 func TestLoadGitLabProjectStatus(t *testing.T) {
 	now := time.Now()
 	status := LoadGitLabProjectStatus(stubGitLabStatusLoader{
-		pipelines: []gitlab.PipelineInfo{{Status: "success", CreatedAt: now}},
-		approval:  &gitlab.MRApprovalInfo{Approved: true},
+		pipelines: []gitlabclient.PipelineInfo{{Status: "success", CreatedAt: now}},
+		approval:  &gitlabclient.MRApprovalInfo{Approved: true},
 	}, "group/repo")
 
 	if status.Status != "success" {

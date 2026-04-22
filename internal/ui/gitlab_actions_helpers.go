@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/DevViking-Persike/njord-cli/internal/gitlab"
+	"github.com/DevViking-Persike/njord-cli/internal/gitlabclient"
 	"github.com/DevViking-Persike/njord-cli/internal/theme"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -76,7 +76,7 @@ func (m GitLabActionsModel) renderBranchLine(i int) string {
 	return "  " + namePart + tags + approvalTag + ago + "\n"
 }
 
-func renderApprovalTag(a *gitlab.MRApprovalInfo) string {
+func renderApprovalTag(a *gitlabclient.MRApprovalInfo) string {
 	if a.Approved {
 		return theme.PipelineSuccessStyle.Render("✓ aprovado")
 	}

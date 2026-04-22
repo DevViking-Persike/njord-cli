@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DevViking-Persike/njord-cli/internal/app"
+	"github.com/DevViking-Persike/njord-cli/internal/app/gitlab"
 	"github.com/DevViking-Persike/njord-cli/internal/config"
-	"github.com/DevViking-Persike/njord-cli/internal/gitlab"
+	"github.com/DevViking-Persike/njord-cli/internal/gitlabclient"
 	"github.com/DevViking-Persike/njord-cli/internal/theme"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -44,7 +44,7 @@ type gitlabProjectStatusMsg struct {
 	gitlabPath string
 	status     string // success, failed, running, pending, canceled, blocked, ""
 	lastTime   time.Time
-	approval   *gitlab.MRApprovalInfo
+	approval   *gitlabclient.MRApprovalInfo
 }
 
 // Tick message for spinner animation
@@ -53,7 +53,7 @@ type gitlabSpinnerTickMsg struct{}
 type GitLabModel struct {
 	cfg        *config.Config
 	configPath string
-	client     *gitlab.Client
+	client     *gitlabclient.Client
 	screen     gitlabScreen
 	goBack     bool
 	selected   *gitlabProjectRef
@@ -61,7 +61,7 @@ type GitLabModel struct {
 
 	projects       []gitlabProjectRef
 	pipelineStatus map[string]string                 // gitlab_path -> status
-	approvalInfo   map[string]*gitlab.MRApprovalInfo // gitlab_path -> approval
+	approvalInfo   map[string]*gitlabclient.MRApprovalInfo // gitlab_path -> approval
 	lastActivity   map[string]time.Time              // gitlab_path -> last pipeline time
 	loadedCount    int
 	sorted         bool
@@ -75,14 +75,14 @@ type GitLabModel struct {
 	width, height int
 }
 
-func NewGitLabModel(cfg *config.Config, configPath string, client *gitlab.Client) GitLabModel {
+func NewGitLabModel(cfg *config.Config, configPath string, client *gitlabclient.Client) GitLabModel {
 	m := GitLabModel{
 		cfg:            cfg,
 		configPath:     configPath,
 		client:         client,
 		screen:         gitlabProjectList,
 		pipelineStatus: make(map[string]string),
-		approvalInfo:   make(map[string]*gitlab.MRApprovalInfo),
+		approvalInfo:   make(map[string]*gitlabclient.MRApprovalInfo),
 		lastActivity:   make(map[string]time.Time),
 	}
 	m.buildProjectList()
@@ -313,7 +313,7 @@ func (m GitLabModel) fetchProjectStatus(gitlabPath string) tea.Cmd {
 	client := m.client
 	return func() tea.Msg {
 		msg := gitlabProjectStatusMsg{gitlabPath: gitlabPath}
-		status := app.LoadGitLabProjectStatus(client, gitlabPath)
+		status := gitlab.LoadGitLabProjectStatus(client, gitlabPath)
 		msg.status = status.Status
 		msg.lastTime = status.LastTime
 		msg.approval = status.Approval
@@ -397,12 +397,12 @@ func (m GitLabModel) handleConfigPath(msg tea.KeyMsg) (GitLabModel, tea.Cmd) {
 			return m, nil
 		}
 		if m.cursor == 0 {
-			glPath, err := app.DetectGitLabPath(m.cfg, m.configRef.catIdx, m.configRef.projIdx)
+			glPath, err := gitlab.DetectGitLabPath(m.cfg, m.configRef.catIdx, m.configRef.projIdx)
 			if err != nil {
 				m.message = fmt.Sprintf("Erro: %s", err)
 				return m, nil
 			}
-			if err := app.SaveGitLabPath(m.cfg, m.configPath, m.configRef.catIdx, m.configRef.projIdx, glPath); err != nil {
+			if err := gitlab.SaveGitLabPath(m.cfg, m.configPath, m.configRef.catIdx, m.configRef.projIdx, glPath); err != nil {
 				m.message = fmt.Sprintf("Erro ao salvar config: %s", err)
 				return m, nil
 			}
@@ -435,7 +435,7 @@ func (m GitLabModel) handleConfigPathInput(msg tea.KeyMsg) (GitLabModel, tea.Cmd
 			m.message = "Projeto não identificado"
 			return m, nil
 		}
-		if err := app.SaveGitLabPath(m.cfg, m.configPath, m.configRef.catIdx, m.configRef.projIdx, val); err != nil {
+		if err := gitlab.SaveGitLabPath(m.cfg, m.configPath, m.configRef.catIdx, m.configRef.projIdx, val); err != nil {
 			m.message = fmt.Sprintf("Erro ao salvar config: %s", err)
 			return m, nil
 		}

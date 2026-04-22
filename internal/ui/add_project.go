@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/DevViking-Persike/njord-cli/internal/app"
+	"github.com/DevViking-Persike/njord-cli/internal/app/project"
 	"github.com/DevViking-Persike/njord-cli/internal/config"
 	"github.com/DevViking-Persike/njord-cli/internal/theme"
 	tea "github.com/charmbracelet/bubbletea"
@@ -695,7 +695,7 @@ func (m AddProjectModel) doClone() tea.Cmd {
 	gitURL := m.gitURL
 	clonePath := m.clonePath
 	return func() tea.Msg {
-		if err := app.CloneProject(gitURL, clonePath); err != nil {
+		if err := project.CloneProject(gitURL, clonePath); err != nil {
 			return cloneDoneMsg{err: err}
 		}
 		return cloneDoneMsg{err: nil}
@@ -703,7 +703,7 @@ func (m AddProjectModel) doClone() tea.Cmd {
 }
 
 func (m *AddProjectModel) saveProject() error {
-	return app.SaveProject(m.cfg, m.configPath, app.AddProjectInput{
+	return project.SaveProject(m.cfg, m.configPath, project.AddProjectInput{
 		GitURL:          m.gitURL,
 		ClonePath:       m.clonePath,
 		Alias:           m.alias,
