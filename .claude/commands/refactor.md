@@ -1,56 +1,66 @@
 ---
-description: Refatorar um arquivo seguindo as regras do CLAUDE.md
+description: Refatorar um arquivo aplicando as regras em .claude/rules/
 argument-hint: <caminho/do/arquivo.go>
 ---
 
-Refatore o arquivo `$ARGUMENTS` seguindo as **Regras de Engenharia** em `CLAUDE.md`.
+Refatore `$ARGUMENTS` seguindo as regras em `.claude/rules/`.
 
-## Passos obrigatórios
+Leia antes de começar:
+- `.claude/rules/01-file-size.md` (alvo ≤ 300 linhas)
+- `.claude/rules/03-solid.md` (SRP, DIP)
+- `.claude/rules/04-clean-architecture.md` (camadas)
+- `.claude/rules/05-simplicity.md` (anti-patterns)
+- `.claude/rules/06-continuous-refactoring.md` (ordem de trabalho)
 
-1. **Leia o arquivo inteiro** antes de propor qualquer mudança.
+## Fluxo
 
-2. **Diagnóstico** — antes de editar, produza um plano listando:
-   - Linhas totais (atual vs alvo ≤ 300)
-   - Responsabilidades distintas presentes (cada uma candidata a um novo arquivo/pacote)
-   - Dependências para fora da camada (ex.: `internal/ui` chamando `os/exec` → deve mover pra gateway)
-   - Funções > 60 linhas — candidatas a split
-   - Cobertura atual do pacote (`go test -cover ./<pkg>/`)
+### 1. Leia o arquivo inteiro antes de propor mudança.
 
-3. **Peça confirmação** do plano ao usuário antes de editar. Se o usuário aprovar, execute na ordem:
+### 2. Diagnóstico (antes de editar)
+- Linhas atuais vs alvo
+- Responsabilidades distintas (cada uma candidata a novo arquivo/pacote)
+- Imports violando camada (ex.: `os/exec` em `internal/ui/`)
+- Funções > 60 linhas
+- Cobertura atual: `go test -cover ./<pkg>/`
 
-   a. **Garantir rede de segurança**
-      - Se a função-alvo não tem teste, escreva teste caracterizando o comportamento atual primeiro.
-      - `go test ./<pkg>/` deve passar antes de qualquer mudança estrutural.
+### 3. Peça confirmação do plano ao usuário.
 
-   b. **Split por responsabilidade**
-      - Novos arquivos no mesmo pacote seguindo o padrão `<feature>_<subresponsibility>.go` (ver `internal/ui/gitlab_actions_branch.go` como referência existente).
-      - Se a responsabilidade pertence a outra camada (regra 4), mover para `internal/app/`, `internal/docker/`, `internal/gitlab/` etc.
-      - Preservar a API pública — consumidores não devem precisar mudar, a menos que a mudança de API seja parte do escopo aprovado.
+### 4. Execução (na ordem)
 
-   c. **Injeção de dependências**
-      - Substituir chamadas concretas a SDKs/exec por interfaces definidas no consumidor.
-      - Struct concreta fica no gateway (`internal/docker/*`), mock fica em `_test.go`.
+**a. Rede de segurança**
+- Função alvo sem teste → escrever teste de caracterização primeiro (regra 6).
+- `go test ./<pkg>/` deve passar antes de qualquer mudança estrutural.
 
-   d. **Simplificação**
-      - Remover wrappers/flags que só repassam parâmetros.
-      - Inlinar funções usadas em um único lugar se isso reduz carga cognitiva.
-      - Deletar código morto (não comentá-lo — deletar).
+**b. Split por responsabilidade**
+- Novos arquivos no mesmo pacote: `<feature>_<subresponsibility>.go` (referência: `internal/ui/gitlab_actions_branch.go`).
+- Responsabilidade de outra camada → mover para pacote correto (regra 4).
+- Preservar API pública, salvo escopo aprovado.
 
-4. **Validação final** — sempre, no fim:
-   - `go test ./...`
-   - `go build ./cmd/njord/`
-   - `go vet ./...`
-   - `wc -l <arquivos_mexidos>` — confirmar ≤ 300
-   - Se pacote alvo era `internal/app` ou `internal/docker`, rodar `gremlins unleash ./<pkg>/` e reportar variação de eficácia.
+**c. Injeção de dependências (regra 3 DIP)**
+- Substituir chamadas concretas a SDK/exec por interfaces do consumidor.
+- Struct concreta permanece no gateway; mock em `_test.go`.
 
-5. **Relatório final** em resposta ao usuário:
-   - Antes/depois: linhas, cobertura, eficácia (se aplicável)
-   - Lista de arquivos novos/removidos/modificados
-   - Mensagem de commit sugerida (não commitar sem pedido explícito)
+**d. Simplificação (regra 5)**
+- Remover wrappers/flags que só repassam.
+- Inlinar funções usadas em 1 lugar.
+- Deletar código morto (não comentar).
+
+### 5. Validação final
+```bash
+go test ./...
+go build ./cmd/njord/
+go vet ./...
+wc -l <arquivos_mexidos>
+```
+Se alvo era `internal/app` ou `internal/docker`: `gremlins unleash ./<pkg>/` e reportar variação.
+
+### 6. Relatório final
+- Antes/depois: linhas, cobertura, eficácia
+- Arquivos criados/removidos/modificados
+- Mensagem de commit sugerida (não commitar sem pedido)
 
 ## Regras de comportamento
-
-- **Nunca** remova testes existentes para "simplificar".
+- **Nunca** remova testes para "simplificar".
 - **Nunca** use `--no-verify` ou pule hooks.
-- Se a refatoração revelar bug pré-existente, **não conserte no mesmo commit** — reportar e perguntar se deve criar commit separado.
-- Se `$ARGUMENTS` estiver vazio ou apontar para arquivo inexistente, pedir confirmação do alvo.
+- Bug pré-existente descoberto → parar e perguntar (regra 6).
+- `$ARGUMENTS` vazio/inexistente → pedir confirmação do alvo.
