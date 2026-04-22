@@ -1,0 +1,32 @@
+silent: false
+tags: ""
+test-cpu: 0
+timeout-coefficient: 3
+
+mutants:
+  arithmetic-base:
+    enabled: true
+  conditionals-boundary:
+    enabled: true
+  conditionals-negation:
+    enabled: true
+  increment-decrement:
+    enabled: true
+  invert-assignments:
+    enabled: true
+  invert-bitwise:
+    enabled: true
+  invert-bitwise-assignments:
+    enabled: true
+  invert-logical:
+    enabled: true
+  invert-loop-ctrl:
+    enabled: true
+  invert-negatives:
+    enabled: true
+  remove-self-assignments:
+    enabled: true
+
+threshold:
+  efficacy: 70
+  mcover: 70
