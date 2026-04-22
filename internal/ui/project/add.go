@@ -1,4 +1,4 @@
-package ui
+package project
 
 import (
 	"fmt"
@@ -35,7 +35,7 @@ type cloneDoneMsg struct {
 	err error
 }
 
-type AddProjectModel struct {
+type AddModel struct {
 	cfg        *config.Config
 	configPath string
 	step       addStep
@@ -64,19 +64,19 @@ type AddProjectModel struct {
 	height      int
 }
 
-func NewAddProjectModel(cfg *config.Config, configPath string) AddProjectModel {
-	return AddProjectModel{
+func NewAddModel(cfg *config.Config, configPath string) AddModel {
+	return AddModel{
 		cfg:        cfg,
 		configPath: configPath,
 		step:       stepGitURL,
 	}
 }
 
-func (m AddProjectModel) Init() tea.Cmd {
+func (m AddModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m AddProjectModel) Update(msg tea.Msg) (AddProjectModel, tea.Cmd) {
+func (m AddModel) Update(msg tea.Msg) (AddModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case cloneDoneMsg:
 		m.cloning = false
@@ -133,7 +133,7 @@ func (m AddProjectModel) Update(msg tea.Msg) (AddProjectModel, tea.Cmd) {
 	return m, nil
 }
 
-func (m AddProjectModel) View() string {
+func (m AddModel) View() string {
 	var b strings.Builder
 
 	header := lipgloss.NewStyle().Bold(true).Foreground(theme.AddGreen).Render("  + Adicionar Projeto")
@@ -306,14 +306,14 @@ func (m AddProjectModel) View() string {
 	return b.String()
 }
 
-func (m *AddProjectModel) SetSize(w, h int) {
+func (m *AddModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
 }
 
-func (m *AddProjectModel) GoBack() bool { return m.goBack }
+func (m *AddModel) GoBack() bool { return m.goBack }
 
-func (m AddProjectModel) handleTextInput(msg tea.KeyMsg) (AddProjectModel, tea.Cmd) {
+func (m AddModel) handleTextInput(msg tea.KeyMsg) (AddModel, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		if m.step == stepGitURL {
@@ -354,7 +354,7 @@ func (m AddProjectModel) handleTextInput(msg tea.KeyMsg) (AddProjectModel, tea.C
 	return m, nil
 }
 
-func (m AddProjectModel) submitTextInput() (AddProjectModel, tea.Cmd) {
+func (m AddModel) submitTextInput() (AddModel, tea.Cmd) {
 	switch m.step {
 	case stepGitURL:
 		url := strings.TrimSpace(m.inputBuf)
@@ -476,7 +476,7 @@ func (m AddProjectModel) submitTextInput() (AddProjectModel, tea.Cmd) {
 	return m, nil
 }
 
-func (m AddProjectModel) handleDestinationSelect(msg tea.KeyMsg) (AddProjectModel, tea.Cmd) {
+func (m AddModel) handleDestinationSelect(msg tea.KeyMsg) (AddModel, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
 		if m.cursor > 0 {
@@ -527,7 +527,7 @@ func (m AddProjectModel) handleDestinationSelect(msg tea.KeyMsg) (AddProjectMode
 	return m, nil
 }
 
-func (m AddProjectModel) handleCategorySelect(msg tea.KeyMsg) (AddProjectModel, tea.Cmd) {
+func (m AddModel) handleCategorySelect(msg tea.KeyMsg) (AddModel, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
 		if m.cursor > 0 {
@@ -554,7 +554,7 @@ func (m AddProjectModel) handleCategorySelect(msg tea.KeyMsg) (AddProjectModel, 
 	return m, nil
 }
 
-func (m *AddProjectModel) buildDestinationOptions() {
+func (m *AddModel) buildDestinationOptions() {
 	m.options = nil
 	m.destPaths = nil
 
@@ -599,7 +599,7 @@ func (m *AddProjectModel) buildDestinationOptions() {
 	m.cursor = 0
 }
 
-func (m *AddProjectModel) buildGroupOptions() {
+func (m *AddModel) buildGroupOptions() {
 	// Collect existing groups for the selected category
 	seen := make(map[string]bool)
 	var existing []string
@@ -621,7 +621,7 @@ func (m *AddProjectModel) buildGroupOptions() {
 	m.cursor = 0
 }
 
-func (m AddProjectModel) handleGroupSelect(msg tea.KeyMsg) (AddProjectModel, tea.Cmd) {
+func (m AddModel) handleGroupSelect(msg tea.KeyMsg) (AddModel, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
 		if m.cursor > 0 {
@@ -661,7 +661,7 @@ func (m AddProjectModel) handleGroupSelect(msg tea.KeyMsg) (AddProjectModel, tea
 	return m, nil
 }
 
-func (m AddProjectModel) handleConfirm(msg tea.KeyMsg) (AddProjectModel, tea.Cmd) {
+func (m AddModel) handleConfirm(msg tea.KeyMsg) (AddModel, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
 		if m.cursor > 0 {
@@ -691,7 +691,7 @@ func (m AddProjectModel) handleConfirm(msg tea.KeyMsg) (AddProjectModel, tea.Cmd
 	return m, nil
 }
 
-func (m AddProjectModel) doClone() tea.Cmd {
+func (m AddModel) doClone() tea.Cmd {
 	gitURL := m.gitURL
 	clonePath := m.clonePath
 	return func() tea.Msg {
@@ -702,7 +702,7 @@ func (m AddProjectModel) doClone() tea.Cmd {
 	}
 }
 
-func (m *AddProjectModel) saveProject() error {
+func (m *AddModel) saveProject() error {
 	return project.SaveProject(m.cfg, m.configPath, project.AddProjectInput{
 		GitURL:          m.gitURL,
 		ClonePath:       m.clonePath,

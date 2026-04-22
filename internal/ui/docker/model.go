@@ -1,4 +1,4 @@
-package ui
+package docker
 
 import (
 	"fmt"
@@ -19,7 +19,7 @@ type stackStatusMsg struct {
 
 type tickRefreshMsg struct{}
 
-type DockerModel struct {
+type Model struct {
 	cfg        *config.Config
 	docker     *docker.Client
 	configPath string
@@ -34,8 +34,8 @@ type DockerModel struct {
 	height     int
 }
 
-func NewDockerModel(cfg *config.Config, dockerClient *docker.Client, configPath string) DockerModel {
-	return DockerModel{
+func NewModel(cfg *config.Config, dockerClient *docker.Client, configPath string) Model {
+	return Model{
 		cfg:        cfg,
 		docker:     dockerClient,
 		configPath: configPath,
@@ -45,11 +45,11 @@ func NewDockerModel(cfg *config.Config, dockerClient *docker.Client, configPath 
 	}
 }
 
-func (m DockerModel) Init() tea.Cmd {
+func (m Model) Init() tea.Cmd {
 	return m.refreshStatuses()
 }
 
-func (m DockerModel) Update(msg tea.Msg) (DockerModel, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case stackStatusMsg:
 		m.statuses = msg.statuses
@@ -88,7 +88,7 @@ func (m DockerModel) Update(msg tea.Msg) (DockerModel, tea.Cmd) {
 	return m, nil
 }
 
-func (m DockerModel) View() string {
+func (m Model) View() string {
 	var b strings.Builder
 
 	header := lipgloss.NewStyle().Bold(true).Foreground(theme.DockerBlue).Render("  Docker Stacks")
@@ -151,20 +151,20 @@ func (m DockerModel) View() string {
 	return b.String()
 }
 
-func (m *DockerModel) SetSize(w, h int) {
+func (m *Model) SetSize(w, h int) {
 	m.width = w
 	m.height = h
 }
 
-func (m *DockerModel) GoBack() bool        { return m.goBack }
-func (m *DockerModel) WantsAddStack() bool { return m.addStack }
-func (m *DockerModel) SelectedStack() *config.DockerStack {
+func (m *Model) GoBack() bool        { return m.goBack }
+func (m *Model) WantsAddStack() bool { return m.addStack }
+func (m *Model) SelectedStack() *config.DockerStack {
 	return m.selected
 }
-func (m *DockerModel) ClearSelection() { m.selected = nil }
-func (m *DockerModel) ClearAddStack()  { m.addStack = false }
+func (m *Model) ClearSelection() { m.selected = nil }
+func (m *Model) ClearAddStack()  { m.addStack = false }
 
-func (m DockerModel) refreshStatuses() tea.Cmd {
+func (m Model) refreshStatuses() tea.Cmd {
 	stacks := m.stacks
 	cfg := m.cfg
 	dockerClient := m.docker

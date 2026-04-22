@@ -1,4 +1,4 @@
-package ui
+package docker
 
 import (
 	"fmt"
@@ -31,7 +31,7 @@ const (
 	ActionLogs
 )
 
-type DockerActionsModel struct {
+type ActionsModel struct {
 	cfg         *config.Config
 	docker      *docker.Client
 	stack       config.DockerStack
@@ -60,14 +60,14 @@ var actionLabels = []struct {
 	{"☰", "Logs", "docker compose logs --tail 50", ActionLogs},
 }
 
-func NewDockerActionsModel(cfg *config.Config, dockerClient *docker.Client, stack config.DockerStack) DockerActionsModel {
+func NewActionsModel(cfg *config.Config, dockerClient *docker.Client, stack config.DockerStack) ActionsModel {
 	var containers []docker.ContainerInfo
 	if dockerClient != nil {
 		projectName := filepath.Base(stack.Path)
 		containers = dockerClient.ListContainers(projectName)
 	}
 
-	return DockerActionsModel{
+	return ActionsModel{
 		cfg:        cfg,
 		docker:     dockerClient,
 		stack:      stack,
@@ -76,11 +76,11 @@ func NewDockerActionsModel(cfg *config.Config, dockerClient *docker.Client, stac
 	}
 }
 
-func (m DockerActionsModel) Init() tea.Cmd {
+func (m ActionsModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m DockerActionsModel) Update(msg tea.Msg) (DockerActionsModel, tea.Cmd) {
+func (m ActionsModel) Update(msg tea.Msg) (ActionsModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case dockerActionDoneMsg:
 		m.running = false
@@ -146,7 +146,7 @@ func (m DockerActionsModel) Update(msg tea.Msg) (DockerActionsModel, tea.Cmd) {
 	return m, nil
 }
 
-func (m DockerActionsModel) View() string {
+func (m ActionsModel) View() string {
 	var b strings.Builder
 
 	// Header
@@ -270,14 +270,14 @@ func translateDockerState(state string) string {
 	}
 }
 
-func (m *DockerActionsModel) SetSize(w, h int) {
+func (m *ActionsModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
 }
 
-func (m *DockerActionsModel) GoBack() bool { return m.goBack }
+func (m *ActionsModel) GoBack() bool { return m.goBack }
 
-func (m *DockerActionsModel) executeAction(action DockerAction) tea.Cmd {
+func (m *ActionsModel) executeAction(action DockerAction) tea.Cmd {
 	if m.docker == nil {
 		m.running = false
 		m.message = "Docker indisponível"

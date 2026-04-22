@@ -1,4 +1,4 @@
-package ui
+package docker
 
 import "testing"
 

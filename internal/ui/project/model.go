@@ -1,4 +1,4 @@
-package ui
+package project
 
 import (
 	"fmt"
@@ -74,7 +74,7 @@ func (d projectDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	fmt.Fprintf(w, "%s\n%s", line1, line2)
 }
 
-type ProjectsModel struct {
+type Model struct {
 	cfg      *config.Config
 	catID    string
 	list     list.Model
@@ -85,7 +85,7 @@ type ProjectsModel struct {
 	height   int
 }
 
-func NewProjectsModel(cfg *config.Config, catID string, projects []config.Project) ProjectsModel {
+func NewModel(cfg *config.Config, catID string, projects []config.Project) Model {
 	// Build items with group headers
 	groups, byGroup := config.GroupedProjects(projects)
 
@@ -119,7 +119,7 @@ func NewProjectsModel(cfg *config.Config, catID string, projects []config.Projec
 	l.Styles.FilterPrompt = lipgloss.NewStyle().Foreground(theme.Title)
 	l.Styles.FilterCursor = lipgloss.NewStyle().Foreground(theme.TitleSel)
 
-	m := ProjectsModel{
+	m := Model{
 		cfg:      cfg,
 		catID:    catID,
 		list:     l,
@@ -132,11 +132,11 @@ func NewProjectsModel(cfg *config.Config, catID string, projects []config.Projec
 	return m
 }
 
-func (m ProjectsModel) Init() tea.Cmd {
+func (m Model) Init() tea.Cmd {
 	return nil
 }
 
-func (m ProjectsModel) Update(msg tea.Msg) (ProjectsModel, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	prevIdx := m.list.Index()
 
 	switch msg := msg.(type) {
@@ -181,7 +181,7 @@ func (m ProjectsModel) Update(msg tea.Msg) (ProjectsModel, tea.Cmd) {
 }
 
 // skipToProject moves the cursor in the given direction (+1/-1) until a projectItem is found.
-func (m *ProjectsModel) skipToProject(dir int) {
+func (m *Model) skipToProject(dir int) {
 	items := m.list.Items()
 	idx := m.list.Index()
 	for idx >= 0 && idx < len(items) {
@@ -199,14 +199,14 @@ func (m *ProjectsModel) skipToProject(dir int) {
 	m.list.Select(idx)
 }
 
-func (m ProjectsModel) View() string {
+func (m Model) View() string {
 	var b strings.Builder
 	b.WriteString("\n")
 	b.WriteString(m.list.View())
 	return b.String()
 }
 
-func (m *ProjectsModel) SetSize(w, h int) {
+func (m *Model) SetSize(w, h int) {
 	m.width = w
 	m.height = h
 	if m.cfg != nil {
@@ -214,10 +214,10 @@ func (m *ProjectsModel) SetSize(w, h int) {
 	}
 }
 
-func (m *ProjectsModel) Selected() *config.Project {
+func (m *Model) Selected() *config.Project {
 	return m.selected
 }
 
-func (m *ProjectsModel) GoBack() bool {
+func (m *Model) GoBack() bool {
 	return m.goBack
 }

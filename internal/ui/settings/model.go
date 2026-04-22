@@ -1,4 +1,4 @@
-package ui
+package settings
 
 import (
 	"fmt"
@@ -40,7 +40,7 @@ type settingsProjectRef struct {
 	display string
 }
 
-type SettingsModel struct {
+type Model struct {
 	cfg        *config.Config
 	configPath string
 	screen     settingsScreen
@@ -62,8 +62,8 @@ type SettingsModel struct {
 	width  int
 }
 
-func NewSettingsModel(cfg *config.Config, configPath string) SettingsModel {
-	return SettingsModel{
+func NewModel(cfg *config.Config, configPath string) Model {
+	return Model{
 		cfg:        cfg,
 		configPath: configPath,
 		screen:     settingsMenu,
@@ -71,11 +71,11 @@ func NewSettingsModel(cfg *config.Config, configPath string) SettingsModel {
 	}
 }
 
-func (m SettingsModel) Init() tea.Cmd {
+func (m Model) Init() tea.Cmd {
 	return nil
 }
 
-func (m SettingsModel) Update(msg tea.Msg) (SettingsModel, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch m.screen {
@@ -108,7 +108,7 @@ func (m SettingsModel) Update(msg tea.Msg) (SettingsModel, tea.Cmd) {
 	return m, nil
 }
 
-func (m SettingsModel) View() string {
+func (m Model) View() string {
 	var b strings.Builder
 
 	header := theme.SettingsTitleSelectedStyle.Render("  ⚙ Configurações")
@@ -240,16 +240,16 @@ func (m SettingsModel) View() string {
 	return b.String()
 }
 
-func (m *SettingsModel) SetSize(w, h int) {
+func (m *Model) SetSize(w, h int) {
 	m.width = w
 	m.scroll.Height = h
 }
 
-func (m *SettingsModel) GoBack() bool { return m.goBack }
+func (m *Model) GoBack() bool { return m.goBack }
 
 // --- Menu handler ---
 
-func (m SettingsModel) handleMenu(msg tea.KeyMsg) (SettingsModel, tea.Cmd) {
+func (m Model) handleMenu(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k", "down", "j":
 		if newCursor, moved := components.ListNav(msg, m.cursor, len(m.options)); moved {
@@ -325,7 +325,7 @@ func (m SettingsModel) handleMenu(msg tea.KeyMsg) (SettingsModel, tea.Cmd) {
 
 // --- Edit Categories handlers ---
 
-func (m SettingsModel) handleEditCategories(msg tea.KeyMsg) (SettingsModel, tea.Cmd) {
+func (m Model) handleEditCategories(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k", "down", "j":
 		if newCursor, moved := components.ListNav(msg, m.cursor, len(m.options)); moved {
@@ -348,7 +348,7 @@ func (m SettingsModel) handleEditCategories(msg tea.KeyMsg) (SettingsModel, tea.
 
 // --- Edit Paths handler ---
 
-func (m SettingsModel) handleEditPaths(msg tea.KeyMsg) (SettingsModel, tea.Cmd) {
+func (m Model) handleEditPaths(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k", "down", "j":
 		if newCursor, moved := components.ListNav(msg, m.cursor, len(m.options)); moved {
@@ -375,7 +375,7 @@ func (m SettingsModel) handleEditPaths(msg tea.KeyMsg) (SettingsModel, tea.Cmd) 
 
 // --- Delete Project handlers ---
 
-func (m SettingsModel) handleDeleteProject(msg tea.KeyMsg) (SettingsModel, tea.Cmd) {
+func (m Model) handleDeleteProject(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k", "down", "j":
 		if newCursor, moved := components.ListNav(msg, m.cursor, len(m.options)); moved {
@@ -396,7 +396,7 @@ func (m SettingsModel) handleDeleteProject(msg tea.KeyMsg) (SettingsModel, tea.C
 	return m, nil
 }
 
-func (m SettingsModel) handleDeleteConfirm(msg tea.KeyMsg) (SettingsModel, tea.Cmd) {
+func (m Model) handleDeleteConfirm(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k", "down", "j":
 		if newCursor, moved := components.ListNav(msg, m.cursor, 2); moved {
@@ -427,7 +427,7 @@ func (m SettingsModel) handleDeleteConfirm(msg tea.KeyMsg) (SettingsModel, tea.C
 
 // --- Edit Group handlers ---
 
-func (m SettingsModel) handleEditGroupProject(msg tea.KeyMsg) (SettingsModel, tea.Cmd) {
+func (m Model) handleEditGroupProject(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k", "down", "j":
 		if newCursor, moved := components.ListNav(msg, m.cursor, len(m.options)); moved {
@@ -448,7 +448,7 @@ func (m SettingsModel) handleEditGroupProject(msg tea.KeyMsg) (SettingsModel, te
 	return m, nil
 }
 
-func (m *SettingsModel) buildGroupSelectOptions() {
+func (m *Model) buildGroupSelectOptions() {
 	ref := m.allProjects[m.selectedProjIdx]
 	cat := m.cfg.Categories[ref.catIdx]
 
@@ -468,7 +468,7 @@ func (m *SettingsModel) buildGroupSelectOptions() {
 	m.cursor = 0
 }
 
-func (m SettingsModel) handleEditGroupSelect(msg tea.KeyMsg) (SettingsModel, tea.Cmd) {
+func (m Model) handleEditGroupSelect(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k", "down", "j":
 		if newCursor, moved := components.ListNav(msg, m.cursor, len(m.options)); moved {
@@ -520,7 +520,7 @@ func (m SettingsModel) handleEditGroupSelect(msg tea.KeyMsg) (SettingsModel, tea
 
 // --- Text input handler ---
 
-func (m SettingsModel) handleTextInput(msg tea.KeyMsg) (SettingsModel, tea.Cmd) {
+func (m Model) handleTextInput(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		m.message = ""
@@ -560,7 +560,7 @@ func (m SettingsModel) handleTextInput(msg tea.KeyMsg) (SettingsModel, tea.Cmd) 
 	return m, nil
 }
 
-func (m SettingsModel) submitSettingsInput() (SettingsModel, tea.Cmd) {
+func (m Model) submitSettingsInput() (Model, tea.Cmd) {
 	val := strings.TrimSpace(m.inputBuf)
 
 	switch m.screen {

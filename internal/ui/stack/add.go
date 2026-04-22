@@ -1,4 +1,4 @@
-package ui
+package stack
 
 import (
 	"fmt"
@@ -22,7 +22,7 @@ const (
 	addStackDone
 )
 
-type AddStackModel struct {
+type AddModel struct {
 	cfg        *config.Config
 	configPath string
 	step       addStackStep
@@ -41,12 +41,12 @@ type AddStackModel struct {
 	height      int
 }
 
-func NewAddStackModel(cfg *config.Config, configPath string) AddStackModel {
+func NewAddModel(cfg *config.Config, configPath string) AddModel {
 	// Discover compose files not yet registered
 	baseDir := config.ExpandPath(cfg.Settings.ProjectsBase)
 	discovered := discoverComposeFiles(baseDir, cfg.DockerStacks)
 
-	return AddStackModel{
+	return AddModel{
 		cfg:        cfg,
 		configPath: configPath,
 		step:       addStackSelectPath,
@@ -54,11 +54,11 @@ func NewAddStackModel(cfg *config.Config, configPath string) AddStackModel {
 	}
 }
 
-func (m AddStackModel) Init() tea.Cmd {
+func (m AddModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m AddStackModel) Update(msg tea.Msg) (AddStackModel, tea.Cmd) {
+func (m AddModel) Update(msg tea.Msg) (AddModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch m.step {
@@ -80,7 +80,7 @@ func (m AddStackModel) Update(msg tea.Msg) (AddStackModel, tea.Cmd) {
 	return m, nil
 }
 
-func (m AddStackModel) View() string {
+func (m AddModel) View() string {
 	var b strings.Builder
 
 	header := lipgloss.NewStyle().Bold(true).Foreground(theme.DockerBlue).Render("  + Adicionar Stack")
@@ -141,14 +141,14 @@ func (m AddStackModel) View() string {
 	return b.String()
 }
 
-func (m *AddStackModel) SetSize(w, h int) {
+func (m *AddModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
 }
 
-func (m *AddStackModel) GoBack() bool { return m.goBack }
+func (m *AddModel) GoBack() bool { return m.goBack }
 
-func (m AddStackModel) handlePathSelect(msg tea.KeyMsg) (AddStackModel, tea.Cmd) {
+func (m AddModel) handlePathSelect(msg tea.KeyMsg) (AddModel, tea.Cmd) {
 	if len(m.discovered) == 0 {
 		if msg.String() == "esc" || msg.String() == "q" {
 			m.goBack = true
@@ -175,7 +175,7 @@ func (m AddStackModel) handlePathSelect(msg tea.KeyMsg) (AddStackModel, tea.Cmd)
 	return m, nil
 }
 
-func (m AddStackModel) handleNameInput(msg tea.KeyMsg) (AddStackModel, tea.Cmd) {
+func (m AddModel) handleNameInput(msg tea.KeyMsg) (AddModel, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		m.step = addStackSelectPath
@@ -202,7 +202,7 @@ func (m AddStackModel) handleNameInput(msg tea.KeyMsg) (AddStackModel, tea.Cmd) 
 	return m, nil
 }
 
-func (m AddStackModel) handleDescInput(msg tea.KeyMsg) (AddStackModel, tea.Cmd) {
+func (m AddModel) handleDescInput(msg tea.KeyMsg) (AddModel, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		m.step = addStackName
@@ -230,7 +230,7 @@ func (m AddStackModel) handleDescInput(msg tea.KeyMsg) (AddStackModel, tea.Cmd) 
 	return m, nil
 }
 
-func (m AddStackModel) handleStackConfirm(msg tea.KeyMsg) (AddStackModel, tea.Cmd) {
+func (m AddModel) handleStackConfirm(msg tea.KeyMsg) (AddModel, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
 		if m.cursor > 0 {

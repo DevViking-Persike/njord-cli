@@ -5,15 +5,20 @@ import (
 	"time"
 
 	jiraapp "github.com/DevViking-Persike/njord-cli/internal/app/jira"
-	jiraui "github.com/DevViking-Persike/njord-cli/internal/ui/jira"
-	gitlabui "github.com/DevViking-Persike/njord-cli/internal/ui/gitlab"
-	"github.com/DevViking-Persike/njord-cli/internal/app/project"
+	projectapp "github.com/DevViking-Persike/njord-cli/internal/app/project"
 	"github.com/DevViking-Persike/njord-cli/internal/config"
-	"github.com/DevViking-Persike/njord-cli/internal/docker"
+	dockerpkg "github.com/DevViking-Persike/njord-cli/internal/docker"
 	"github.com/DevViking-Persike/njord-cli/internal/gitlabclient"
 	"github.com/DevViking-Persike/njord-cli/internal/jiraclient"
 	"github.com/DevViking-Persike/njord-cli/internal/theme"
+	dockerui "github.com/DevViking-Persike/njord-cli/internal/ui/docker"
+	gitlabui "github.com/DevViking-Persike/njord-cli/internal/ui/gitlab"
+	"github.com/DevViking-Persike/njord-cli/internal/ui/grid"
+	jiraui "github.com/DevViking-Persike/njord-cli/internal/ui/jira"
+	projectui "github.com/DevViking-Persike/njord-cli/internal/ui/project"
+	"github.com/DevViking-Persike/njord-cli/internal/ui/settings"
 	"github.com/DevViking-Persike/njord-cli/internal/ui/shared"
+	"github.com/DevViking-Persike/njord-cli/internal/ui/stack"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -30,13 +35,13 @@ type gitlabInitMsg struct {
 
 // Async message for recent pushes
 type recentPushesMsg struct {
-	pushes []RecentPushAlias
+	pushes []grid.RecentPushAlias
 	err    error
 }
 
 // Async message for pending MRs
 type pendingMRsMsg struct {
-	mrs []PendingMRAlias
+	mrs []grid.PendingMRAlias
 	err error
 }
 
@@ -65,19 +70,19 @@ type Result struct {
 type AppModel struct {
 	screen Screen
 	config *config.Config
-	docker *docker.Client
+	docker *dockerpkg.Client
 	result *Result
 	width  int
 	height int
 
 	// Sub-models
-	grid          GridModel
-	projects      ProjectsModel
-	dockerScreen  DockerModel
-	dockerActions DockerActionsModel
-	addProject    AddProjectModel
-	addStack      AddStackModel
-	settings      SettingsModel
+	grid          grid.Model
+	projects      projectui.Model
+	dockerScreen  dockerui.Model
+	dockerActions dockerui.ActionsModel
+	addProject    projectui.AddModel
+	addStack      stack.AddModel
+	settings      settings.Model
 	gitlabScreen  gitlabui.Model
 	gitlabActions gitlabui.ActionsModel
 	jiraSpaces    jiraui.SpacesModel
@@ -96,8 +101,8 @@ type AppModel struct {
 	quitting      bool
 }
 
-func NewApp(cfg *config.Config, dockerClient *docker.Client, configPath string) AppModel {
-	grid := NewGridModel(cfg)
+func NewApp(cfg *config.Config, dockerClient *dockerpkg.Client, configPath string) AppModel {
+	grid := grid.NewModel(cfg)
 	return AppModel{
 		screen:     ScreenGrid,
 		config:     cfg,
@@ -157,14 +162,14 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case recentPushesMsg:
 		m.grid.SetRecentPushes(msg.pushes)
 		if msg.err != nil {
-			m.grid.pushError = msg.err.Error()
+			m.grid.SetPushError(msg.err.Error())
 		}
 		return m, nil
 
 	case pendingMRsMsg:
 		m.grid.SetPendingMRs(msg.mrs)
 		if msg.err != nil {
-			m.grid.mrsError = msg.err.Error()
+			m.grid.SetMRsError(msg.err.Error())
 		}
 		return m, nil
 
@@ -245,17 +250,17 @@ func (m AppModel) GetResult() *Result {
 
 // refreshGrid recria o grid com a config atualizada, preservando dados do header.
 func (m *AppModel) refreshGrid() {
-	pushes := m.grid.recentPushes
-	mrs := m.grid.pendingMRs
-	pushErr := m.grid.pushError
-	mrsErr := m.grid.mrsError
+	pushes := m.grid.RecentPushes()
+	mrs := m.grid.PendingMRs()
+	pushErr := m.grid.PushError()
+	mrsErr := m.grid.MRsError()
 
-	m.grid = NewGridModel(m.config)
+	m.grid = grid.NewModel(m.config)
 	m.grid.SetSize(m.width, m.height)
-	m.grid.recentPushes = pushes
-	m.grid.pendingMRs = mrs
-	m.grid.pushError = pushErr
-	m.grid.mrsError = mrsErr
+	m.grid.SetRecentPushes(pushes)
+	m.grid.SetPendingMRs(mrs)
+	m.grid.SetPushError(pushErr)
+	m.grid.SetMRsError(mrsErr)
 }
 
 // --- Screen transition handlers ---
@@ -269,15 +274,15 @@ func (m AppModel) updateGrid(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.grid.ClearSelection()
 
 		switch sel.Type {
-		case GridItemCategory:
+		case grid.ItemCategory:
 			if sel.CatID == "*" {
 				// "Todos" category - show all projects
-				m.projects = NewProjectsModel(m.config, sel.CatID, m.config.AllProjects())
+				m.projects = projectui.NewModel(m.config, sel.CatID, m.config.AllProjects())
 				m.projects.SetSize(m.width, m.height)
 			} else {
 				for _, cat := range m.config.Categories {
 					if cat.ID == sel.CatID {
-						m.projects = NewProjectsModel(m.config, sel.CatID, cat.Projects)
+						m.projects = projectui.NewModel(m.config, sel.CatID, cat.Projects)
 						m.projects.SetSize(m.width, m.height)
 						break
 					}
@@ -287,17 +292,17 @@ func (m AppModel) updateGrid(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screen = ScreenProjects
 			return m, m.projects.Init()
 
-		case GridItemDocker:
-			m.dockerScreen = NewDockerModel(m.config, m.docker, m.configPath)
+		case grid.ItemDocker:
+			m.dockerScreen = dockerui.NewModel(m.config, m.docker, m.configPath)
 			m.dockerScreen.SetSize(m.width, m.height)
 			m.screen = ScreenDocker
 			return m, m.dockerScreen.Init()
 
-		case GridItemGitLab:
+		case grid.ItemGitLab:
 			// Check if token is configured
 			if m.config.GitLab.Token == "" {
 				// Redirect to settings to configure token
-				m.settings = NewSettingsModel(m.config, m.configPath)
+				m.settings = settings.NewModel(m.config, m.configPath)
 				m.settings.SetSize(m.width, m.height)
 				m.screen = ScreenSettings
 				return m, m.settings.Init()
@@ -314,19 +319,19 @@ func (m AppModel) updateGrid(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screen = ScreenGitLab
 			return m, m.gitlabScreen.Init()
 
-		case GridItemAdd:
-			m.addProject = NewAddProjectModel(m.config, m.configPath)
+		case grid.ItemAdd:
+			m.addProject = projectui.NewAddModel(m.config, m.configPath)
 			m.addProject.SetSize(m.width, m.height)
 			m.screen = ScreenAddProject
 			return m, m.addProject.Init()
 
-		case GridItemSettings:
-			m.settings = NewSettingsModel(m.config, m.configPath)
+		case grid.ItemSettings:
+			m.settings = settings.NewModel(m.config, m.configPath)
 			m.settings.SetSize(m.width, m.height)
 			m.screen = ScreenSettings
 			return m, m.settings.Init()
 
-		case GridItemJira:
+		case grid.ItemJira:
 			if m.jiraClient == nil {
 				client, err := jiraclient.NewClient(m.config.Jira.URL, m.config.Jira.Email, m.config.Jira.Token)
 				if err != nil {
@@ -385,7 +390,7 @@ func (m AppModel) updateProjects(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if proj := m.projects.Selected(); proj != nil {
-		command, err := project.BuildProjectCommand(m.config, *proj)
+		command, err := projectapp.BuildProjectCommand(m.config, *proj)
 		if err != nil {
 			return m, nil
 		}
@@ -408,7 +413,7 @@ func (m AppModel) updateDocker(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if stack := m.dockerScreen.SelectedStack(); stack != nil {
 		m.selectedStack = stack
-		m.dockerActions = NewDockerActionsModel(m.config, m.docker, *stack)
+		m.dockerActions = dockerui.NewActionsModel(m.config, m.docker, *stack)
 		m.dockerActions.SetSize(m.width, m.height)
 		m.dockerScreen.ClearSelection()
 		m.screen = ScreenDockerActions
@@ -417,7 +422,7 @@ func (m AppModel) updateDocker(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.dockerScreen.WantsAddStack() {
 		m.dockerScreen.ClearAddStack()
-		m.addStack = NewAddStackModel(m.config, m.configPath)
+		m.addStack = stack.NewAddModel(m.config, m.configPath)
 		m.addStack.SetSize(m.width, m.height)
 		m.screen = ScreenAddStack
 		return m, m.addStack.Init()
@@ -431,7 +436,7 @@ func (m AppModel) updateDockerActions(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.dockerActions, cmd = m.dockerActions.Update(msg)
 
 	if m.dockerActions.GoBack() {
-		m.dockerScreen = NewDockerModel(m.config, m.docker, m.configPath)
+		m.dockerScreen = dockerui.NewModel(m.config, m.docker, m.configPath)
 		m.dockerScreen.SetSize(m.width, m.height)
 		m.screen = ScreenDocker
 		return m, m.dockerScreen.Init()
@@ -466,7 +471,7 @@ func (m AppModel) updateAddStack(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if updated, err := config.Load(m.configPath); err == nil {
 			m.config = updated
 		}
-		m.dockerScreen = NewDockerModel(m.config, m.docker, m.configPath)
+		m.dockerScreen = dockerui.NewModel(m.config, m.docker, m.configPath)
 		m.dockerScreen.SetSize(m.width, m.height)
 		m.screen = ScreenDocker
 		return m, m.dockerScreen.Init()
@@ -559,7 +564,7 @@ func fetchRecentPushes(client *gitlabclient.Client, cfg *config.Config) tea.Cmd 
 		// Filter to last 6 hours only
 		sixHoursAgo := time.Now().Add(-6 * time.Hour)
 
-		var result []RecentPushAlias
+		var result []grid.RecentPushAlias
 		for _, push := range pushes {
 			if push.CreatedAt.Before(sixHoursAgo) {
 				continue
@@ -588,7 +593,7 @@ func fetchRecentPushes(client *gitlabclient.Client, cfg *config.Config) tea.Cmd 
 				}
 			}
 
-			result = append(result, RecentPushAlias{
+			result = append(result, grid.RecentPushAlias{
 				Alias:    alias,
 				Ago:      shared.TimeAgo(push.CreatedAt),
 				Approval: approvalIcon,
@@ -612,7 +617,7 @@ func fetchPendingMRs(client *gitlabclient.Client, cfg *config.Config) tea.Cmd {
 
 		pathToAlias := cfg.PathToAliasMap()
 
-		var result []PendingMRAlias
+		var result []grid.PendingMRAlias
 		for _, mr := range mrs {
 			projectPath, err := client.ResolveProjectPath(mr.ProjectID)
 			if err != nil {
@@ -634,7 +639,7 @@ func fetchPendingMRs(client *gitlabclient.Client, cfg *config.Config) tea.Cmd {
 				approvalIcon = fmt.Sprintf("⏳ %d/%d", approval.ApprovalsGiven, approval.ApprovalsRequired)
 			}
 
-			result = append(result, PendingMRAlias{
+			result = append(result, grid.PendingMRAlias{
 				Alias:    alias,
 				IID:      mr.IID,
 				Title:    mr.Title,

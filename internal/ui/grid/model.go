@@ -1,4 +1,4 @@
-package ui
+package grid
 
 import (
 	"fmt"
@@ -11,15 +11,15 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-type GridItemType int
+type ItemType int
 
 const (
-	GridItemCategory GridItemType = iota
-	GridItemDocker
-	GridItemGitLab
-	GridItemJira
-	GridItemAdd
-	GridItemSettings
+	ItemCategory ItemType = iota
+	ItemDocker
+	ItemGitLab
+	ItemJira
+	ItemAdd
+	ItemSettings
 )
 
 // RecentPushAlias holds alias + time + approval info for display
@@ -38,27 +38,27 @@ type PendingMRAlias struct {
 	Approval string // "✓", "⏳ 0/1", ""
 }
 
-type GridItem struct {
-	Type  GridItemType
+type Item struct {
+	Type  ItemType
 	CatID string
 	Name  string
 	Sub   string
 	Count int
 }
 
-type GridSelection struct {
-	Type  GridItemType
+type Selection struct {
+	Type  ItemType
 	CatID string
 }
 
-type GridModel struct {
-	items        []GridItem
+type Model struct {
+	items        []Item
 	cursor       int
 	cols         int
 	cardWidth    int
 	width        int
 	height       int
-	selected     *GridSelection
+	selected     *Selection
 	offset       int // scroll offset in rows
 	recentPushes []RecentPushAlias
 	pendingMRs   []PendingMRAlias
@@ -66,12 +66,12 @@ type GridModel struct {
 	mrsError     string
 }
 
-func NewGridModel(cfg *config.Config) GridModel {
-	var items []GridItem
+func NewModel(cfg *config.Config) Model {
+	var items []Item
 
 	// "Todos" category
-	items = append(items, GridItem{
-		Type:  GridItemCategory,
+	items = append(items, Item{
+		Type:  ItemCategory,
 		CatID: "*",
 		Name:  "Todos",
 		Sub:   "Todos os projetos",
@@ -80,8 +80,8 @@ func NewGridModel(cfg *config.Config) GridModel {
 
 	// Regular categories
 	for _, cat := range cfg.Categories {
-		items = append(items, GridItem{
-			Type:  GridItemCategory,
+		items = append(items, Item{
+			Type:  ItemCategory,
 			CatID: cat.ID,
 			Name:  cat.Name,
 			Sub:   cat.Sub,
@@ -90,16 +90,16 @@ func NewGridModel(cfg *config.Config) GridModel {
 	}
 
 	// Docker card
-	items = append(items, GridItem{
-		Type:  GridItemDocker,
+	items = append(items, Item{
+		Type:  ItemDocker,
 		Name:  "Docker",
 		Sub:   "Gerenciar stacks",
 		Count: len(cfg.DockerStacks),
 	})
 
 	// GitLab card
-	items = append(items, GridItem{
-		Type:  GridItemGitLab,
+	items = append(items, Item{
+		Type:  ItemGitLab,
 		Name:  "GitLab",
 		Sub:   "MRs, Pipelines, Branches",
 		Count: cfg.GitLabProjectCount(),
@@ -107,47 +107,54 @@ func NewGridModel(cfg *config.Config) GridModel {
 
 	// Jira card
 	if cfg.Jira.Token != "" && cfg.Jira.URL != "" {
-		items = append(items, GridItem{
-			Type: GridItemJira,
+		items = append(items, Item{
+			Type: ItemJira,
 			Name: "Jira",
 			Sub:  "Espaços, Tasks, Epics",
 		})
 	}
 
 	// Add card
-	items = append(items, GridItem{
-		Type: GridItemAdd,
+	items = append(items, Item{
+		Type: ItemAdd,
 		Name: "+ Adicionar",
 		Sub:  "Novo projeto",
 	})
 
 	// Settings card
-	items = append(items, GridItem{
-		Type: GridItemSettings,
+	items = append(items, Item{
+		Type: ItemSettings,
 		Name: "Configurações",
 		Sub:  "Editar categorias e paths",
 	})
 
-	return GridModel{
+	return Model{
 		items:     items,
 		cols:      2,
 		cardWidth: 36,
 	}
 }
 
-func (m *GridModel) SetRecentPushes(pushes []RecentPushAlias) {
+func (m *Model) SetRecentPushes(pushes []RecentPushAlias) {
 	m.recentPushes = pushes
 }
 
-func (m *GridModel) SetPendingMRs(mrs []PendingMRAlias) {
+func (m *Model) SetPendingMRs(mrs []PendingMRAlias) {
 	m.pendingMRs = mrs
 }
 
-func (m GridModel) Init() tea.Cmd {
+func (m *Model) SetPushError(err string) { m.pushError = err }
+func (m *Model) SetMRsError(err string)  { m.mrsError = err }
+func (m Model) RecentPushes() []RecentPushAlias { return m.recentPushes }
+func (m Model) PendingMRs() []PendingMRAlias    { return m.pendingMRs }
+func (m Model) PushError() string               { return m.pushError }
+func (m Model) MRsError() string                { return m.mrsError }
+
+func (m Model) Init() tea.Cmd {
 	return nil
 }
 
-func (m GridModel) Update(msg tea.Msg) (GridModel, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -172,7 +179,7 @@ func (m GridModel) Update(msg tea.Msg) (GridModel, tea.Cmd) {
 		case "enter":
 			if m.cursor < len(m.items) {
 				item := m.items[m.cursor]
-				m.selected = &GridSelection{
+				m.selected = &Selection{
 					Type:  item.Type,
 					CatID: item.CatID,
 				}
@@ -184,7 +191,7 @@ func (m GridModel) Update(msg tea.Msg) (GridModel, tea.Cmd) {
 	return m, nil
 }
 
-func (m GridModel) View() string {
+func (m Model) View() string {
 	var b strings.Builder
 
 	// Header: [Aprovações recentes] [MRs pendentes] ᚾ N J O R D
@@ -235,7 +242,7 @@ func (m GridModel) View() string {
 	return b.String()
 }
 
-func (m GridModel) renderApprovalBox() string {
+func (m Model) renderApprovalBox() string {
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#8b6508")).
@@ -289,7 +296,7 @@ func (m GridModel) renderApprovalBox() string {
 	return boxStyle.Render(content)
 }
 
-func (m *GridModel) SetSize(w, h int) {
+func (m *Model) SetSize(w, h int) {
 	m.width = w
 	m.height = h
 	m.recalcLayout()
@@ -299,7 +306,7 @@ func (m *GridModel) SetSize(w, h int) {
 	m.ensureVisible()
 }
 
-func (m *GridModel) recalcLayout() {
+func (m *Model) recalcLayout() {
 	if m.width <= 0 {
 		return
 	}
@@ -319,19 +326,19 @@ func (m *GridModel) recalcLayout() {
 	m.cardWidth = (m.width / m.cols) - shared.BorderOverhead
 }
 
-func (m *GridModel) Selected() *GridSelection {
+func (m *Model) Selected() *Selection {
 	return m.selected
 }
 
-func (m *GridModel) ClearSelection() {
+func (m *Model) ClearSelection() {
 	m.selected = nil
 }
 
-func (m GridModel) renderCard(item GridItem, selected bool) string {
+func (m Model) renderCard(item Item, selected bool) string {
 	var cardStyle, titleStyle, subStyle, countStyle lipgloss.Style
 
 	switch item.Type {
-	case GridItemDocker:
+	case ItemDocker:
 		if selected {
 			cardStyle = theme.DockerCardSelectedStyle
 			titleStyle = theme.DockerTitleSelectedStyle
@@ -343,7 +350,7 @@ func (m GridModel) renderCard(item GridItem, selected bool) string {
 			subStyle = theme.SubStyle
 			countStyle = theme.CountStyle
 		}
-	case GridItemGitLab:
+	case ItemGitLab:
 		if selected {
 			cardStyle = theme.GitLabCardSelectedStyle
 			titleStyle = theme.GitLabTitleSelectedStyle
@@ -355,7 +362,7 @@ func (m GridModel) renderCard(item GridItem, selected bool) string {
 			subStyle = theme.SubStyle
 			countStyle = theme.CountStyle
 		}
-	case GridItemJira:
+	case ItemJira:
 		if selected {
 			cardStyle = theme.JiraCardSelectedStyle
 			titleStyle = theme.JiraTitleSelectedStyle
@@ -367,7 +374,7 @@ func (m GridModel) renderCard(item GridItem, selected bool) string {
 			subStyle = theme.SubStyle
 			countStyle = theme.CountStyle
 		}
-	case GridItemAdd:
+	case ItemAdd:
 		if selected {
 			cardStyle = theme.AddCardSelectedStyle
 			titleStyle = theme.AddTitleSelectedStyle
@@ -379,7 +386,7 @@ func (m GridModel) renderCard(item GridItem, selected bool) string {
 			subStyle = theme.SubStyle
 			countStyle = theme.CountStyle
 		}
-	case GridItemSettings:
+	case ItemSettings:
 		if selected {
 			cardStyle = theme.SettingsCardSelectedStyle
 			titleStyle = theme.SettingsTitleSelectedStyle
@@ -409,7 +416,7 @@ func (m GridModel) renderCard(item GridItem, selected bool) string {
 	sub := subStyle.Render(item.Sub)
 
 	var count string
-	if item.Type == GridItemAdd || item.Type == GridItemSettings || item.Type == GridItemJira {
+	if item.Type == ItemAdd || item.Type == ItemSettings || item.Type == ItemJira {
 		count = ""
 	} else {
 		count = countStyle.Render(fmt.Sprintf("%d projetos", item.Count))
@@ -420,7 +427,7 @@ func (m GridModel) renderCard(item GridItem, selected bool) string {
 	return cardStyle.Render(content)
 }
 
-func (m GridModel) visibleRows() int {
+func (m Model) visibleRows() int {
 	// Header ~3 lines (title + blank), help ~2 lines
 	available := m.height - 7
 	if available < shared.CardHeight {
@@ -429,7 +436,7 @@ func (m GridModel) visibleRows() int {
 	return available / shared.CardHeight
 }
 
-func (m *GridModel) ensureVisible() {
+func (m *Model) ensureVisible() {
 	row := m.cursor / m.cols
 	visible := m.visibleRows()
 
