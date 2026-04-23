@@ -128,6 +128,47 @@ func TestIsBenignProgressLine(t *testing.T) {
 	}
 }
 
+func TestParseConflictContainerName(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "real compose error",
+			in:   `Conflict. The container name "/sgo-backoffice-api" is already in use by container "0cbdac57a238"`,
+			want: "sgo-backoffice-api",
+		},
+		{
+			name: "without leading slash",
+			in:   `container name "foo-bar" is already in use by container "abc"`,
+			want: "foo-bar",
+		},
+		{
+			name: "wrapped in daemon prefix",
+			in:   `Error response from daemon: Conflict. The container name "/x" is already in use by container "y"`,
+			want: "x",
+		},
+		{
+			name: "not a conflict error",
+			in:   "no such container",
+			want: "",
+		},
+		{
+			name: "empty",
+			in:   "",
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := parseConflictContainerName(tt.in); got != tt.want {
+				t.Errorf("parseConflictContainerName(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestUnavailableStatus(t *testing.T) {
 	s := UnavailableStatus()
 	if s.Symbol != "!" {

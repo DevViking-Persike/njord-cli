@@ -243,3 +243,33 @@ func TestSetProjectGitLabPath_LastIndex(t *testing.T) {
 		t.Fatalf("GitLabPath = %q, want group/b", cfg.Categories[0].Projects[1].GitLabPath)
 	}
 }
+
+func TestSetProjectGitHubPath(t *testing.T) {
+	cfg := seedConfig()
+	if err := cfg.SetProjectGitHubPath(0, 0, "user/a"); err != nil {
+		t.Fatalf("SetProjectGitHubPath() error = %v", err)
+	}
+	if got := cfg.Categories[0].Projects[0].GitHubPath; got != "user/a" {
+		t.Fatalf("GitHubPath = %q, want user/a", got)
+	}
+}
+
+func TestSetProjectGitHubPath_IndexErrors(t *testing.T) {
+	tests := []struct {
+		name            string
+		catIdx, projIdx int
+	}{
+		{"negative catIdx", -1, 0},
+		{"catIdx equals len", 1, 0},
+		{"negative projIdx", 0, -1},
+		{"projIdx equals len", 0, 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := seedConfig()
+			if err := cfg.SetProjectGitHubPath(tt.catIdx, tt.projIdx, "u/p"); err == nil {
+				t.Errorf("SetProjectGitHubPath(%d,%d) err = nil, want error", tt.catIdx, tt.projIdx)
+			}
+		})
+	}
+}

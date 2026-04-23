@@ -8,10 +8,13 @@ import (
 	projectapp "github.com/DevViking-Persike/njord-cli/internal/app/project"
 	"github.com/DevViking-Persike/njord-cli/internal/config"
 	dockerpkg "github.com/DevViking-Persike/njord-cli/internal/docker"
+	"github.com/DevViking-Persike/njord-cli/internal/githubclient"
 	"github.com/DevViking-Persike/njord-cli/internal/gitlabclient"
 	"github.com/DevViking-Persike/njord-cli/internal/jiraclient"
 	"github.com/DevViking-Persike/njord-cli/internal/theme"
+	cloneui "github.com/DevViking-Persike/njord-cli/internal/ui/clone"
 	dockerui "github.com/DevViking-Persike/njord-cli/internal/ui/docker"
+	githubui "github.com/DevViking-Persike/njord-cli/internal/ui/github"
 	gitlabui "github.com/DevViking-Persike/njord-cli/internal/ui/gitlab"
 	"github.com/DevViking-Persike/njord-cli/internal/ui/grid"
 	jiraui "github.com/DevViking-Persike/njord-cli/internal/ui/jira"
@@ -55,10 +58,19 @@ const (
 	ScreenAddProject
 	ScreenAddStack
 	ScreenSettings
+	ScreenGitLabHub
 	ScreenGitLab
 	ScreenGitLabActions
+	ScreenGitHubList
+	ScreenGitHubActions
+	ScreenLocalList
+	ScreenCloneGroups
+	ScreenClone
 	ScreenJiraSpaces
+	ScreenJiraActions
 	ScreenJiraIssues
+	ScreenJiraCreate
+	ScreenJiraEdit
 )
 
 // Result is the final output from the TUI.
@@ -83,13 +95,25 @@ type AppModel struct {
 	addProject    projectui.AddModel
 	addStack      stack.AddModel
 	settings      settings.Model
+	gitlabHub     gitlabui.HubModel
 	gitlabScreen  gitlabui.Model
 	gitlabActions gitlabui.ActionsModel
+	githubList    githubui.Model
+	githubActions githubui.ActionsModel
+	localList     gitlabui.LocalModel
+	cloneGroups   cloneui.GroupsModel
+	cloneScreen   cloneui.Model
 	jiraSpaces    jiraui.SpacesModel
+	jiraActions   jiraui.SpaceActionsModel
 	jiraIssues    jiraui.IssuesModel
+	jiraCreate    jiraui.CreateModel
+	jiraEdit      jiraui.EditModel
 
 	// GitLab client (lazy init)
 	gitlabClient *gitlabclient.Client
+
+	// GitHub client (lazy init)
+	githubClient *githubclient.Client
 
 	// Jira client (lazy init)
 	jiraClient *jiraclient.Client
@@ -132,10 +156,19 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.addProject.SetSize(msg.Width, msg.Height)
 		m.addStack.SetSize(msg.Width, msg.Height)
 		m.settings.SetSize(msg.Width, msg.Height)
+		m.gitlabHub.SetSize(msg.Width, msg.Height)
 		m.gitlabScreen.SetSize(msg.Width, msg.Height)
 		m.gitlabActions.SetSize(msg.Width, msg.Height)
+		m.githubList.SetSize(msg.Width, msg.Height)
+		m.githubActions.SetSize(msg.Width, msg.Height)
+		m.localList.SetSize(msg.Width, msg.Height)
+		m.cloneGroups.SetSize(msg.Width, msg.Height)
+		m.cloneScreen.SetSize(msg.Width, msg.Height)
 		m.jiraSpaces.SetSize(msg.Width, msg.Height)
+		m.jiraActions.SetSize(msg.Width, msg.Height)
 		m.jiraIssues.SetSize(msg.Width, msg.Height)
+		m.jiraCreate.SetSize(msg.Width, msg.Height)
+		m.jiraEdit.SetSize(msg.Width, msg.Height)
 		return m, nil
 
 	case gitlabInitMsg:
@@ -195,14 +228,32 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateAddStack(msg)
 	case ScreenSettings:
 		return m.updateSettings(msg)
+	case ScreenGitLabHub:
+		return m.updateGitLabHub(msg)
 	case ScreenGitLab:
 		return m.updateGitLab(msg)
 	case ScreenGitLabActions:
 		return m.updateGitLabActions(msg)
+	case ScreenGitHubList:
+		return m.updateGitHubList(msg)
+	case ScreenGitHubActions:
+		return m.updateGitHubActions(msg)
+	case ScreenLocalList:
+		return m.updateLocalList(msg)
+	case ScreenCloneGroups:
+		return m.updateCloneGroups(msg)
+	case ScreenClone:
+		return m.updateClone(msg)
 	case ScreenJiraSpaces:
 		return m.updateJiraSpaces(msg)
+	case ScreenJiraActions:
+		return m.updateJiraActions(msg)
 	case ScreenJiraIssues:
 		return m.updateJiraIssues(msg)
+	case ScreenJiraCreate:
+		return m.updateJiraCreate(msg)
+	case ScreenJiraEdit:
+		return m.updateJiraEdit(msg)
 	}
 
 	return m, nil
@@ -229,14 +280,32 @@ func (m AppModel) View() string {
 		content = m.addStack.View()
 	case ScreenSettings:
 		content = m.settings.View()
+	case ScreenGitLabHub:
+		content = m.gitlabHub.View()
 	case ScreenGitLab:
 		content = m.gitlabScreen.View()
 	case ScreenGitLabActions:
 		content = m.gitlabActions.View()
+	case ScreenGitHubList:
+		content = m.githubList.View()
+	case ScreenGitHubActions:
+		content = m.githubActions.View()
+	case ScreenLocalList:
+		content = m.localList.View()
+	case ScreenCloneGroups:
+		content = m.cloneGroups.View()
+	case ScreenClone:
+		content = m.cloneScreen.View()
 	case ScreenJiraSpaces:
 		content = m.jiraSpaces.View()
+	case ScreenJiraActions:
+		content = m.jiraActions.View()
 	case ScreenJiraIssues:
 		content = m.jiraIssues.View()
+	case ScreenJiraCreate:
+		content = m.jiraCreate.View()
+	case ScreenJiraEdit:
+		content = m.jiraEdit.View()
 	}
 
 	help := theme.HelpStyle.Render("  ↑↓←→ navigate  enter select  esc back  q quit")
@@ -299,25 +368,10 @@ func (m AppModel) updateGrid(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.dockerScreen.Init()
 
 		case grid.ItemGitLab:
-			// Check if token is configured
-			if m.config.GitLab.Token == "" {
-				// Redirect to settings to configure token
-				m.settings = settings.NewModel(m.config, m.configPath)
-				m.settings.SetSize(m.width, m.height)
-				m.screen = ScreenSettings
-				return m, m.settings.Init()
-			}
-			// Lazy init gitlab client
-			if m.gitlabClient == nil {
-				client, err := gitlabclient.NewClient(m.config.GitLab.Token, m.config.GitLab.GitLabURL())
-				if err == nil {
-					m.gitlabClient = client
-				}
-			}
-			m.gitlabScreen = gitlabui.NewModel(m.config, m.configPath, m.gitlabClient)
-			m.gitlabScreen.SetSize(m.width, m.height)
-			m.screen = ScreenGitLab
-			return m, m.gitlabScreen.Init()
+			m.gitlabHub = gitlabui.NewHubModel(m.config)
+			m.gitlabHub.SetSize(m.width, m.height)
+			m.screen = ScreenGitLabHub
+			return m, m.gitlabHub.Init()
 
 		case grid.ItemAdd:
 			m.addProject = projectui.NewAddModel(m.config, m.configPath)
@@ -350,35 +404,6 @@ func (m AppModel) updateGrid(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m AppModel) updateJiraSpaces(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-	m.jiraSpaces, cmd = m.jiraSpaces.Update(msg)
-
-	if m.jiraSpaces.GoBack() {
-		m.screen = ScreenGrid
-		return m, nil
-	}
-	if sel := m.jiraSpaces.Selected(); sel != nil {
-		m.jiraSpaces.ClearSelection()
-		svc := jiraapp.NewJiraService(m.jiraClient)
-		m.jiraIssues = jiraui.NewIssuesModel(svc, *sel)
-		m.jiraIssues.SetSize(m.width, m.height)
-		m.screen = ScreenJiraIssues
-		return m, m.jiraIssues.Init()
-	}
-	return m, cmd
-}
-
-func (m AppModel) updateJiraIssues(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-	m.jiraIssues, cmd = m.jiraIssues.Update(msg)
-
-	if m.jiraIssues.GoBack() {
-		m.screen = ScreenJiraSpaces
-		return m, nil
-	}
-	return m, cmd
-}
 
 func (m AppModel) updateProjects(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
@@ -497,46 +522,6 @@ func (m AppModel) updateSettings(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m AppModel) updateGitLab(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-	m.gitlabScreen, cmd = m.gitlabScreen.Update(msg)
-
-	if m.gitlabScreen.GoBack() {
-		// Reload config in case gitlab_path was modified
-		if updated, err := config.Load(m.configPath); err == nil {
-			m.config = updated
-			m.refreshGrid()
-		}
-		m.screen = ScreenGrid
-		return m, nil
-	}
-
-	if sel := m.gitlabScreen.Selected(); sel != nil {
-		m.gitlabScreen.ClearSelection()
-		if m.gitlabClient != nil {
-			m.gitlabActions = gitlabui.NewActionsModel(m.gitlabClient, sel.GitLabPath, sel.Alias, m.config.GitLab.GitLabURL())
-			m.gitlabActions.SetSize(m.width, m.height)
-			m.screen = ScreenGitLabActions
-			return m, m.gitlabActions.Init()
-		}
-	}
-
-	return m, cmd
-}
-
-func (m AppModel) updateGitLabActions(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-	m.gitlabActions, cmd = m.gitlabActions.Update(msg)
-
-	if m.gitlabActions.GoBack() {
-		m.gitlabScreen = gitlabui.NewModel(m.config, m.configPath, m.gitlabClient)
-		m.gitlabScreen.SetSize(m.width, m.height)
-		m.screen = ScreenGitLab
-		return m, m.gitlabScreen.Init()
-	}
-
-	return m, cmd
-}
 
 func (m AppModel) initGitLabFetches() tea.Cmd {
 	token := m.config.GitLab.Token

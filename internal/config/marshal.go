@@ -11,6 +11,7 @@ func marshalYAML(cfg *Config) ([]byte, error) {
 
 	writeSettings(&b, cfg.Settings)
 	writeGitLab(&b, cfg.GitLab)
+	writeGitHub(&b, cfg.GitHub)
 	writeJira(&b, cfg.Jira)
 	writeCategories(&b, cfg.Categories)
 	writeDockerStacks(&b, cfg.DockerStacks)
@@ -31,6 +32,14 @@ func writeGitLab(b *strings.Builder, g GitLabSettings) {
 	if g.URL != "" {
 		fmt.Fprintf(b, "  url: %q\n", g.URL)
 	}
+}
+
+func writeGitHub(b *strings.Builder, g GitHubSettings) {
+	if g.Token == "" {
+		return
+	}
+	b.WriteString("\ngithub:\n")
+	fmt.Fprintf(b, "  token: %q\n", g.Token)
 }
 
 func writeJira(b *strings.Builder, j JiraSettings) {
@@ -71,6 +80,9 @@ func writeProject(b *strings.Builder, p Project) {
 	}
 	if p.GitLabPath != "" {
 		fmt.Fprintf(b, "        gitlab_path: %q\n", p.GitLabPath)
+	}
+	if p.GitHubPath != "" {
+		fmt.Fprintf(b, "        github_path: %q\n", p.GitHubPath)
 	}
 }
 

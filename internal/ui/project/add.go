@@ -72,6 +72,24 @@ func NewAddModel(cfg *config.Config, configPath string) AddModel {
 	}
 }
 
+// NewAddModelWithURL pula a tela de URL usando o valor já conhecido (vindo da
+// tela de clone). Se a URL não for válida, cai no fluxo normal pra o usuário
+// corrigir. Espelha a validação de submitTextInput.stepGitURL.
+func NewAddModelWithURL(cfg *config.Config, configPath, gitURL string) AddModel {
+	m := NewAddModel(cfg, configPath)
+	url := strings.TrimSpace(gitURL)
+	if url == "" {
+		return m
+	}
+	if !strings.HasPrefix(url, "git@") && !strings.HasPrefix(url, "https://") {
+		return m
+	}
+	m.gitURL = url
+	m.buildDestinationOptions()
+	m.step = stepDestination
+	return m
+}
+
 func (m AddModel) Init() tea.Cmd {
 	return nil
 }

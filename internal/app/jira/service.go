@@ -14,6 +14,10 @@ type JiraGateway interface {
 	CurrentUser() (jiraclient.User, error)
 	SearchIssues(jql string) (jiraclient.SearchResult, error)
 	ListProjects() ([]jiraclient.Project, error)
+	CreateIssue(jiraclient.CreateIssueInput) (jiraclient.Issue, error)
+	UpdateIssue(key string, in jiraclient.UpdateIssueInput) error
+	ListTransitions(key string) ([]jiraclient.Transition, error)
+	TransitionIssue(key, transitionID string) error
 }
 
 // JiraService composes use cases for tasks, stories and epics.

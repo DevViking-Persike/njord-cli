@@ -173,6 +173,126 @@ func (c *Client) CreateBranch(projectPath, branchName, ref string) error {
 	return nil
 }
 
+// ListMyGroups devolve os grupos/subgrupos acessíveis pelo token. Paginado.
+// Útil pra o usuário escolher uma camada antes de listar os repos — reduz o
+// número de requests e o peso da tela seguinte.
+func (c *Client) ListMyGroups() ([]GroupInfo, error) {
+	const perPage = 100
+	const maxPages = 5
+
+	var out []GroupInfo
+	for page := 1; page <= maxPages; page++ {
+		opts := &gl.ListGroupsOptions{
+			OrderBy: gl.Ptr("name"),
+			Sort:    gl.Ptr("asc"),
+			ListOptions: gl.ListOptions{
+				PerPage: int64(perPage),
+				Page:    int64(page),
+			},
+		}
+		batch, _, err := c.gl.Groups.ListGroups(opts)
+		if err != nil {
+			return nil, fmt.Errorf("listando grupos: %w", err)
+		}
+		if len(batch) == 0 {
+			break
+		}
+		for _, g := range batch {
+			out = append(out, GroupInfo{
+				ID:          int64(g.ID),
+				Name:        g.Name,
+				FullPath:    g.FullPath,
+				FullName:    g.FullName,
+				Description: g.Description,
+				WebURL:      g.WebURL,
+			})
+		}
+		if len(batch) < perPage {
+			break
+		}
+	}
+	return out, nil
+}
+
+// ListGroupProjects devolve só os projetos dentro de um grupo específico.
+// includeSubgroups=true recolhe também os projetos dos subgrupos, o que é o
+// comportamento padrão esperado pela TUI.
+func (c *Client) ListGroupProjects(groupID int64, includeSubgroups bool) ([]ProjectInfo, error) {
+	const perPage = 100
+	const maxPages = 10
+
+	var out []ProjectInfo
+	for page := 1; page <= maxPages; page++ {
+		opts := &gl.ListGroupProjectsOptions{
+			IncludeSubGroups: gl.Ptr(includeSubgroups),
+			OrderBy:          gl.Ptr("last_activity_at"),
+			Sort:             gl.Ptr("desc"),
+			ListOptions: gl.ListOptions{
+				PerPage: int64(perPage),
+				Page:    int64(page),
+			},
+		}
+		batch, _, err := c.gl.Groups.ListGroupProjects(groupID, opts)
+		if err != nil {
+			return nil, fmt.Errorf("listando projetos do grupo %d: %w", groupID, err)
+		}
+		if len(batch) == 0 {
+			break
+		}
+		for _, p := range batch {
+			out = append(out, ProjectInfo{
+				PathWithNamespace: p.PathWithNamespace,
+				Description:       p.Description,
+				SSHURLToRepo:      p.SSHURLToRepo,
+				WebURL:            p.WebURL,
+			})
+		}
+		if len(batch) < perPage {
+			break
+		}
+	}
+	return out, nil
+}
+
+// ListMyAccessibleProjects devolve os projetos que o token consegue enxergar
+// (owner, membro direto ou via grupo). Pagina até maxPages = 10 (1000 itens).
+func (c *Client) ListMyAccessibleProjects() ([]ProjectInfo, error) {
+	const perPage = 100
+	const maxPages = 10
+
+	var out []ProjectInfo
+	for page := 1; page <= maxPages; page++ {
+		opts := &gl.ListProjectsOptions{
+			Membership: gl.Ptr(true),
+			OrderBy:    gl.Ptr("last_activity_at"),
+			Sort:       gl.Ptr("desc"),
+			ListOptions: gl.ListOptions{
+				PerPage: int64(perPage),
+				Page:    int64(page),
+			},
+		}
+		batch, _, err := c.gl.Projects.ListProjects(opts)
+		if err != nil {
+			return nil, fmt.Errorf("listando projetos: %w", err)
+		}
+		if len(batch) == 0 {
+			break
+		}
+		for _, p := range batch {
+			out = append(out, ProjectInfo{
+				PathWithNamespace: p.PathWithNamespace,
+				Description:       p.Description,
+				SSHURLToRepo:      p.SSHURLToRepo,
+				WebURL:            p.WebURL,
+			})
+		}
+		if len(batch) < perPage {
+			break
+		}
+	}
+	return out, nil
+}
+
 func (c *Client) ListRecentPushes(days int) ([]RecentPush, error) {
 	after := gl.ISOTime(time.Now().AddDate(0, 0, -days))
 	opts := &gl.ListContributionEventsOptions{

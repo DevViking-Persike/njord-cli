@@ -3,7 +3,7 @@
 BINARY := njord
 INSTALL_PATH := $(HOME)/.local/bin/njord-cli
 PKG := ./...
-MUTATION_PKGS := ./internal/app/gitlab/ ./internal/app/jira/ ./internal/app/project/ ./internal/docker/ ./internal/config/ ./internal/jiraclient/
+MUTATION_PKGS := ./internal/app/github/ ./internal/app/gitlab/ ./internal/app/jira/ ./internal/app/project/ ./internal/docker/ ./internal/config/ ./internal/jiraclient/
 
 build:
 	go build -o $(BINARY) ./cmd/njord/

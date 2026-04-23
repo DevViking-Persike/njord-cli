@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/DevViking-Persike/njord-cli/internal/app/gitlab"
+	githubapp "github.com/DevViking-Persike/njord-cli/internal/app/github"
 	"github.com/DevViking-Persike/njord-cli/internal/config"
 	"github.com/DevViking-Persike/njord-cli/internal/gitlabclient"
 	"github.com/DevViking-Persike/njord-cli/internal/theme"
@@ -32,12 +33,9 @@ const (
 	gitlabConfigPathInput
 )
 
-type gitlabProjectRef struct {
-	catIdx  int
-	projIdx int
-	project config.Project
-	catName string
-}
+// Filter resolve a lista de projetos exibidos na tela a partir da config.
+// O model pede essa função tanto na inicialização quanto após mutação da YAML.
+type Filter func(*config.Config) []githubapp.ProjectRef
 
 // Async message for pipeline status + approval
 type gitlabProjectStatusMsg struct {
@@ -54,15 +52,16 @@ type Model struct {
 	cfg        *config.Config
 	configPath string
 	client     *gitlabclient.Client
+	filter     Filter
 	screen     gitlabScreen
 	goBack     bool
-	selected   *gitlabProjectRef
-	configRef  *gitlabProjectRef
+	selected   *githubapp.ProjectRef
+	configRef  *githubapp.ProjectRef
 
-	projects       []gitlabProjectRef
-	pipelineStatus map[string]string                 // gitlab_path -> status
+	projects       []githubapp.ProjectRef
+	pipelineStatus map[string]string                       // gitlab_path -> status
 	approvalInfo   map[string]*gitlabclient.MRApprovalInfo // gitlab_path -> approval
-	lastActivity   map[string]time.Time              // gitlab_path -> last pipeline time
+	lastActivity   map[string]time.Time                    // gitlab_path -> last pipeline time
 	loadedCount    int
 	sorted         bool
 	cursor         int
@@ -75,11 +74,17 @@ type Model struct {
 	width, height int
 }
 
-func NewModel(cfg *config.Config, configPath string, client *gitlabclient.Client) Model {
+// NewModel constrói a tela com a lista já filtrada. Passar githubapp.FilterGitLab
+// pra comportamento pré-hub; outro filtro pra variar o conjunto exibido.
+func NewModel(cfg *config.Config, configPath string, client *gitlabclient.Client, filter Filter) Model {
+	if filter == nil {
+		filter = githubapp.FilterGitLab
+	}
 	m := Model{
 		cfg:            cfg,
 		configPath:     configPath,
 		client:         client,
+		filter:         filter,
 		screen:         gitlabProjectList,
 		pipelineStatus: make(map[string]string),
 		approvalInfo:   make(map[string]*gitlabclient.MRApprovalInfo),
@@ -90,17 +95,7 @@ func NewModel(cfg *config.Config, configPath string, client *gitlabclient.Client
 }
 
 func (m *Model) buildProjectList() {
-	m.projects = nil
-	for ci, cat := range m.cfg.Categories {
-		for pi, proj := range cat.Projects {
-			m.projects = append(m.projects, gitlabProjectRef{
-				catIdx:  ci,
-				projIdx: pi,
-				project: proj,
-				catName: cat.Name,
-			})
-		}
-	}
+	m.projects = m.filter(m.cfg)
 }
 
 func (m Model) Init() tea.Cmd {
@@ -110,7 +105,7 @@ func (m Model) Init() tea.Cmd {
 	// Fetch pipeline status for all projects + start spinner
 	cmds := []tea.Cmd{spinnerTick()}
 	for _, ref := range m.projects {
-		path := ref.project.GitLabPath
+		path := ref.Project.GitLabPath
 		if path == "" {
 			continue
 		}
@@ -181,10 +176,10 @@ func (m Model) View() string {
 			}
 			for i := start; i < end; i++ {
 				ref := m.projects[i]
-				icon := m.renderStatusIcon(ref.project.GitLabPath)
-				label := ref.project.Alias + " — " + ref.project.Desc
-				approvalTag := m.renderApprovalTag(ref.project.GitLabPath)
-				pathLabel := ref.project.GitLabPath
+				icon := m.renderStatusIcon(ref.Project.GitLabPath)
+				label := ref.Project.Alias + " — " + ref.Project.Desc
+				approvalTag := m.renderApprovalTag(ref.Project.GitLabPath)
+				pathLabel := ref.Project.GitLabPath
 				if pathLabel == "" {
 					pathLabel = "sem gitlab_path"
 				}
@@ -207,7 +202,7 @@ func (m Model) View() string {
 			return b.String()
 		}
 		ref := m.configRef
-		b.WriteString("  " + theme.TextStyle.Render("Projeto: "+ref.project.Alias) + "\n\n")
+		b.WriteString("  " + theme.TextStyle.Render("Projeto: "+ref.Project.Alias) + "\n\n")
 		b.WriteString("  " + theme.TextStyle.Render("GitLab path não configurado.") + "\n\n")
 		opts := []string{"Auto-detectar do git remote", "Digitar manualmente"}
 		for i, opt := range opts {
@@ -245,7 +240,7 @@ func (m *Model) Selected() *config.Project {
 	if m.selected == nil {
 		return nil
 	}
-	p := m.selected.project
+	p := m.selected.Project
 	return &p
 }
 func (m *Model) ClearSelection()             { m.selected = nil }
@@ -300,10 +295,10 @@ func (m Model) renderStatusIcon(gitlabPath string) string {
 func (m Model) hasActiveSpinners() bool {
 	// Active if any project still loading or has running/pending pipeline
 	for _, ref := range m.projects {
-		if ref.project.GitLabPath == "" {
+		if ref.Project.GitLabPath == "" {
 			continue
 		}
-		status, ok := m.pipelineStatus[ref.project.GitLabPath]
+		status, ok := m.pipelineStatus[ref.Project.GitLabPath]
 		if !ok {
 			return true // still loading
 		}
@@ -331,8 +326,8 @@ func (m Model) fetchProjectStatus(gitlabPath string) tea.Cmd {
 
 func (m *Model) sortByRecent() {
 	sort.SliceStable(m.projects, func(i, j int) bool {
-		ti := m.lastActivity[m.projects[i].project.GitLabPath]
-		tj := m.lastActivity[m.projects[j].project.GitLabPath]
+		ti := m.lastActivity[m.projects[i].Project.GitLabPath]
+		tj := m.lastActivity[m.projects[j].Project.GitLabPath]
 		return ti.After(tj)
 	})
 }
@@ -370,7 +365,7 @@ func (m Model) handleProjectList(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "enter":
 		if len(m.projects) > 0 && m.cursor < len(m.projects) {
 			ref := m.projects[m.cursor]
-			if ref.project.GitLabPath == "" {
+			if ref.Project.GitLabPath == "" {
 				m.configRef = &ref
 				m.screen = gitlabConfigPath
 				m.cursor = 0
@@ -404,12 +399,12 @@ func (m Model) handleConfigPath(msg tea.KeyMsg) (Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.cursor == 0 {
-			glPath, err := gitlab.DetectGitLabPath(m.cfg, m.configRef.catIdx, m.configRef.projIdx)
+			glPath, err := gitlab.DetectGitLabPath(m.cfg, m.configRef.CatIdx, m.configRef.ProjIdx)
 			if err != nil {
 				m.message = fmt.Sprintf("Erro: %s", err)
 				return m, nil
 			}
-			if err := gitlab.SaveGitLabPath(m.cfg, m.configPath, m.configRef.catIdx, m.configRef.projIdx, glPath); err != nil {
+			if err := gitlab.SaveGitLabPath(m.cfg, m.configPath, m.configRef.CatIdx, m.configRef.ProjIdx, glPath); err != nil {
 				m.message = fmt.Sprintf("Erro ao salvar config: %s", err)
 				return m, nil
 			}
@@ -442,7 +437,7 @@ func (m Model) handleConfigPathInput(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.message = "Projeto não identificado"
 			return m, nil
 		}
-		if err := gitlab.SaveGitLabPath(m.cfg, m.configPath, m.configRef.catIdx, m.configRef.projIdx, val); err != nil {
+		if err := gitlab.SaveGitLabPath(m.cfg, m.configPath, m.configRef.CatIdx, m.configRef.ProjIdx, val); err != nil {
 			m.message = fmt.Sprintf("Erro ao salvar config: %s", err)
 			return m, nil
 		}

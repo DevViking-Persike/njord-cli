@@ -97,12 +97,11 @@ func NewModel(cfg *config.Config) Model {
 		Count: len(cfg.DockerStacks),
 	})
 
-	// GitLab card
+	// Repositórios card (hub unificado: GitLab / GitHub / Local / Clonar)
 	items = append(items, Item{
-		Type:  ItemGitLab,
-		Name:  "GitLab",
-		Sub:   "MRs, Pipelines, Branches",
-		Count: cfg.GitLabProjectCount(),
+		Type: ItemGitLab,
+		Name: "Repositórios",
+		Sub:  "GitLab, GitHub, Local, Clonar",
 	})
 
 	// Jira card
@@ -416,7 +415,7 @@ func (m Model) renderCard(item Item, selected bool) string {
 	sub := subStyle.Render(item.Sub)
 
 	var count string
-	if item.Type == ItemAdd || item.Type == ItemSettings || item.Type == ItemJira {
+	if item.Type == ItemAdd || item.Type == ItemSettings || item.Type == ItemJira || item.Type == ItemGitLab {
 		count = ""
 	} else {
 		count = countStyle.Render(fmt.Sprintf("%d projetos", item.Count))

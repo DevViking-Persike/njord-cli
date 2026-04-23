@@ -32,3 +32,30 @@ type Project struct {
 	Name string // display name (e.g. "Squad GAP")
 	ID   string
 }
+
+// Transition é uma opção de mudança de status disponível pra uma issue; o ID
+// é o que o POST /transitions consome.
+type Transition struct {
+	ID        string
+	Name      string // display (ex.: "Em desenvolvimento")
+	ToStatus  string
+	StatusCat string // "new" | "indeterminate" | "done"
+}
+
+// CreateIssueInput reúne o mínimo pra criar uma issue via POST /issue.
+// ParentKey é obrigatório quando Type == "Subtask" (ou outro subtipo).
+type CreateIssueInput struct {
+	ProjectKey      string
+	Summary         string
+	Description     string
+	Type            string // "Task" | "Bug" | "Story" | "Subtask"
+	ParentKey       string // usado só se Type for subtask
+	AssigneeAccount string // accountId do assignee (usamos o usuário atual)
+}
+
+// UpdateIssueInput atualiza campos editáveis via PUT /issue/{key}. Campos
+// vazios são ignorados no payload.
+type UpdateIssueInput struct {
+	Summary     string
+	Description string
+}

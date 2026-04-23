@@ -2,8 +2,6 @@ package stack
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/DevViking-Persike/njord-cli/internal/config"
@@ -16,11 +14,16 @@ type addStackStep int
 
 const (
 	addStackSelectPath addStackStep = iota
+	addStackCreateDir
 	addStackName
 	addStackDesc
 	addStackConfirm
 	addStackDone
 )
+
+// createNewStackLabel é o item fixo no topo da lista de discovery que leva
+// ao fluxo de criar uma pasta nova em ~/Avita/Dockers/.
+const createNewStackLabel = "+ Criar novo stack"
 
 type AddModel struct {
 	cfg        *config.Config
@@ -42,9 +45,10 @@ type AddModel struct {
 }
 
 func NewAddModel(cfg *config.Config, configPath string) AddModel {
-	// Discover compose files not yet registered
+	// Discover compose files not yet registered. O primeiro item da lista é
+	// sempre "+ Criar novo stack" — funciona mesmo se o discovery vier vazio.
 	baseDir := config.ExpandPath(cfg.Settings.ProjectsBase)
-	discovered := discoverComposeFiles(baseDir, cfg.DockerStacks)
+	discovered := append([]string{createNewStackLabel}, discoverComposeFiles(baseDir, cfg.DockerStacks)...)
 
 	return AddModel{
 		cfg:        cfg,
@@ -64,6 +68,8 @@ func (m AddModel) Update(msg tea.Msg) (AddModel, tea.Cmd) {
 		switch m.step {
 		case addStackSelectPath:
 			return m.handlePathSelect(msg)
+		case addStackCreateDir:
+			return m.handleCreateDirInput(msg)
 		case addStackName:
 			return m.handleNameInput(msg)
 		case addStackDesc:
@@ -104,6 +110,14 @@ func (m AddModel) View() string {
 			}
 			b.WriteString("\n" + theme.HelpStyle.Render("  ↑↓ navigate  enter select  esc back"))
 		}
+
+	case addStackCreateDir:
+		b.WriteString("  " + theme.TextStyle.Render("Nome da pasta em ~/Avita/Dockers/:") + "\n\n")
+		b.WriteString("  " + theme.TitleStyle.Render("> ") + m.inputBuf + theme.DimStyle.Render("█") + "\n")
+		if m.message != "" {
+			b.WriteString("\n  " + theme.ErrorStyle.Render(m.message) + "\n")
+		}
+		b.WriteString("\n" + theme.HelpStyle.Render("  enter criar  esc back"))
 
 	case addStackName:
 		b.WriteString("  " + theme.TextStyle.Render("Nome da stack (exibição no menu):") + "\n\n")
@@ -168,7 +182,14 @@ func (m AddModel) handlePathSelect(msg tea.KeyMsg) (AddModel, tea.Cmd) {
 	case "esc", "q":
 		m.goBack = true
 	case "enter":
-		m.stackPath = m.discovered[m.cursor]
+		choice := m.discovered[m.cursor]
+		if choice == createNewStackLabel {
+			m.inputBuf = ""
+			m.message = ""
+			m.step = addStackCreateDir
+			return m, nil
+		}
+		m.stackPath = choice
 		m.inputBuf = ""
 		m.step = addStackName
 	}
@@ -265,39 +286,3 @@ func (m AddModel) handleStackConfirm(msg tea.KeyMsg) (AddModel, tea.Cmd) {
 	return m, nil
 }
 
-func discoverComposeFiles(baseDir string, existing []config.DockerStack) []string {
-	entries, err := os.ReadDir(baseDir)
-	if err != nil {
-		return nil
-	}
-
-	registeredPaths := make(map[string]bool)
-	for _, stack := range existing {
-		registeredPaths[stack.Path] = true
-	}
-
-	var discovered []string
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		dir := filepath.Join(baseDir, entry.Name())
-		candidates := []string{
-			filepath.Join(dir, "docker-compose.yml"),
-			filepath.Join(dir, "docker-compose.yaml"),
-			filepath.Join(dir, "compose.yml"),
-			filepath.Join(dir, "compose.yaml"),
-		}
-		foundCompose := false
-		for _, composePath := range candidates {
-			if _, err := os.Stat(composePath); err == nil {
-				foundCompose = true
-				break
-			}
-		}
-		if foundCompose && !registeredPaths[entry.Name()] {
-			discovered = append(discovered, entry.Name())
-		}
-	}
-	return discovered
-}

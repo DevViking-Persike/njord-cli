@@ -126,6 +126,38 @@ func TestWriteProject_OmitsOptionalFields(t *testing.T) {
 	if strings.Contains(s, "gitlab_path:") {
 		t.Errorf("expected gitlab_path omitted: %q", s)
 	}
+	if strings.Contains(s, "github_path:") {
+		t.Errorf("expected github_path omitted: %q", s)
+	}
+}
+
+func TestWriteProject_IncludesGitHubPath(t *testing.T) {
+	var b strings.Builder
+	writeProject(&b, Project{Alias: "a", Desc: "d", Path: "p", GitHubPath: "user/repo"})
+	s := b.String()
+	if !strings.Contains(s, `github_path: "user/repo"`) {
+		t.Errorf("expected github_path present: %q", s)
+	}
+}
+
+func TestWriteGitHub_OmitsSectionWhenEmpty(t *testing.T) {
+	var b strings.Builder
+	writeGitHub(&b, GitHubSettings{})
+	if got := b.String(); got != "" {
+		t.Errorf("expected empty output, got %q", got)
+	}
+}
+
+func TestWriteGitHub_WritesToken(t *testing.T) {
+	var b strings.Builder
+	writeGitHub(&b, GitHubSettings{Token: "ghp_abc"})
+	s := b.String()
+	if !strings.Contains(s, "github:") {
+		t.Errorf("expected github: section, got %q", s)
+	}
+	if !strings.Contains(s, `token: "ghp_abc"`) {
+		t.Errorf("expected token line, got %q", s)
+	}
 }
 
 func TestGitLabURL_DefaultWhenEmpty(t *testing.T) {

@@ -76,3 +76,17 @@ func (cfg *Config) SetProjectGitLabPath(catIdx, projIdx int, gitlabPath string) 
 	cfg.Categories[catIdx].Projects[projIdx].GitLabPath = gitlabPath
 	return nil
 }
+
+// SetProjectGitHubPath updates the github_path of a project by index.
+func (cfg *Config) SetProjectGitHubPath(catIdx, projIdx int, githubPath string) error {
+	if catIdx < 0 || catIdx >= len(cfg.Categories) {
+		return fmt.Errorf("category index out of range: %d", catIdx)
+	}
+
+	if projIdx < 0 || projIdx >= len(cfg.Categories[catIdx].Projects) {
+		return fmt.Errorf("project index out of range: %d", projIdx)
+	}
+
+	cfg.Categories[catIdx].Projects[projIdx].GitHubPath = githubPath
+	return nil
+}

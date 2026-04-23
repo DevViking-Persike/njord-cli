@@ -24,6 +24,7 @@ type Project struct {
 	Path       string `koanf:"path" yaml:"path"`
 	Group      string `koanf:"group" yaml:"group,omitempty"`
 	GitLabPath string `koanf:"gitlab_path" yaml:"gitlab_path,omitempty"`
+	GitHubPath string `koanf:"github_path" yaml:"github_path,omitempty"`
 }
 
 type Category struct {
@@ -51,6 +52,10 @@ func (g GitLabSettings) GitLabURL() string {
 	return "https://gitlab.com"
 }
 
+type GitHubSettings struct {
+	Token string `koanf:"token" yaml:"token,omitempty"`
+}
+
 type JiraSettings struct {
 	Token string `koanf:"token" yaml:"token"`
 	URL   string `koanf:"url" yaml:"url,omitempty"`
@@ -60,6 +65,7 @@ type JiraSettings struct {
 type Config struct {
 	Settings     Settings       `koanf:"settings" yaml:"settings"`
 	GitLab       GitLabSettings `koanf:"gitlab" yaml:"gitlab"`
+	GitHub       GitHubSettings `koanf:"github" yaml:"github,omitempty"`
 	Jira         JiraSettings   `koanf:"jira" yaml:"jira,omitempty"`
 	Categories   []Category     `koanf:"categories" yaml:"categories"`
 	DockerStacks []DockerStack  `koanf:"docker_stacks" yaml:"docker_stacks"`

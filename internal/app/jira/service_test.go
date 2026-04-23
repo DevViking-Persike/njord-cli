@@ -18,6 +18,36 @@ type fakeJiraGW struct {
 	projectsErr error
 	lastJQL     string
 	callCount   int
+
+	// mutation hooks (usados só nos testes que mexem em CRUD)
+	createdInput  jiraclient.CreateIssueInput
+	createResult  jiraclient.Issue
+	createErr     error
+	updateKey     string
+	updateInput   jiraclient.UpdateIssueInput
+	updateErr     error
+	transitions   []jiraclient.Transition
+	transErr      error
+	transitionKey string
+	transitionID  string
+}
+
+func (f *fakeJiraGW) CreateIssue(in jiraclient.CreateIssueInput) (jiraclient.Issue, error) {
+	f.createdInput = in
+	return f.createResult, f.createErr
+}
+func (f *fakeJiraGW) UpdateIssue(key string, in jiraclient.UpdateIssueInput) error {
+	f.updateKey = key
+	f.updateInput = in
+	return f.updateErr
+}
+func (f *fakeJiraGW) ListTransitions(string) ([]jiraclient.Transition, error) {
+	return f.transitions, f.transErr
+}
+func (f *fakeJiraGW) TransitionIssue(key, id string) error {
+	f.transitionKey = key
+	f.transitionID = id
+	return nil
 }
 
 func (f *fakeJiraGW) CurrentUser() (jiraclient.User, error) {

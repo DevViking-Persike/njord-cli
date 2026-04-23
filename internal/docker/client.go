@@ -19,6 +19,11 @@ import (
 
 var ansiRegexp = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]`)
 
+// containerConflictRegex captura o nome do container conflitante na mensagem
+// "Conflict. The container name "/foo" is already in use by container "abc..."".
+// Docker sempre prefixa o nome com "/"; o grupo 1 já vem sem a barra.
+var containerConflictRegex = regexp.MustCompile(`container name "/?([^"]+)" is already in use`)
+
 type ContainerInfo struct {
 	Name  string
 	State string
@@ -102,11 +107,43 @@ func (c *Client) ListContainers(projectName string) []ContainerInfo {
 }
 
 // StartProject starts a docker compose project.
+//
+// Se o compose falhar com conflito de nome de container (ex.: um container
+// parado de outra stack/projeto com `container_name:` pinado está ocupando
+// o nome), remove o container conflitante e repete o up. Só tenta uma vez
+// pra evitar loops se o problema for outro.
 func (c *Client) StartProject(composePath, projectName string) error {
 	if c.isComposeValid(composePath) {
-		return c.composeExec(composePath, "up", "-d")
+		err := c.composeExec(composePath, "up", "-d")
+		if err == nil {
+			return nil
+		}
+		if name := parseConflictContainerName(err.Error()); name != "" {
+			if rmErr := c.forceRemoveContainer(name); rmErr == nil {
+				return c.composeExec(composePath, "up", "-d")
+			}
+		}
+		return err
 	}
 	return c.startByLabel(projectName)
+}
+
+// parseConflictContainerName extrai o nome do container conflitante do erro
+// do compose. Retorna "" se a mensagem não bater com o padrão.
+func parseConflictContainerName(msg string) string {
+	m := containerConflictRegex.FindStringSubmatch(msg)
+	if len(m) == 2 {
+		return m[1]
+	}
+	return ""
+}
+
+// forceRemoveContainer apaga um container por nome (ignora parado/rodando)
+// via API do daemon. Usado pra resolver conflitos de nome antes de retry.
+func (c *Client) forceRemoveContainer(name string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return c.cli.ContainerRemove(ctx, name, container.RemoveOptions{Force: true})
 }
 
 // StopProject stops a docker compose project.
