@@ -1,0 +1,26 @@
+{
+  "//": "Hooks recomendados para Claude Code na base .spec/. MESCLE isto no .claude/settings.json do projeto (não substitua o arquivo inteiro). Não é auto-aplicado — opt-in.",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/tools/spec-check.sh >/dev/null 2>&1 || echo '⚠️ spec-check falhou — rode: bash .claude/tools/spec-check.sh'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path // empty' 2>/dev/null); case \"$f\" in *\".spec/\"*) bash .claude/tools/spec-check.sh >/dev/null 2>&1 || echo '⚠️ link/estrutura quebrada no .spec — bash .claude/tools/spec-check.sh';; esac"
+          }
+        ]
+      }
+    ]
+  }
+}

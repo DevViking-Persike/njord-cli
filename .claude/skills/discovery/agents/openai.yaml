@@ -1,0 +1,4 @@
+interface:
+  display_name: "Discovery"
+  short_description: "Discovery de produto e engenharia"
+  default_prompt: "Use $discovery para conduzir discovery de produto ou desenvolvimento antes da entrega."

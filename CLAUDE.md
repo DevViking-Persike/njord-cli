@@ -2,6 +2,17 @@
 
 TUI em Go para gerenciar projetos, GitLab e Docker.
 
+## Bootstrap Operacional
+
+Antes de implementar ou revisar incrementos, leia:
+
+1. `.spec/MANIFEST.md`
+2. `.spec/STATE.md`
+3. `.spec/sprints/RUNBOOK.md`
+
+A esteira do projeto roda em modo `refatorar`: Discovery -> Arquitetura design
+-> Desenvolvimento -> Arquitetura review -> Review de Codigo -> QA -> Seguranca.
+
 ## Build & Run
 
 ```bash
